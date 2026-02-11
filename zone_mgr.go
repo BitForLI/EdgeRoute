@@ -41,7 +41,7 @@ func buildZoneRecords(zone infrastructurev1alpha1.Zone, soaRec string, ns []NSRe
 
 	serial := time.Now().Format("20060102") + "00"
 	// Create SOA Record
-	soa, err := dns.NewRR(fmt.Sprintf("$ORIGIN %s\n@ IN SOA %s.%s %s. %s 7200 3600 1209600 3600", zoneNormalized, soaRec, zoneNormalized, zone.Spec.Email, serial))
+	soa, err := dns.NewRR(fmt.Sprintf("$ORIGIN %s\n@ IN SOA %s.%s %s %s 7200 3600 1209600 3600", zoneNormalized, soaRec, zoneNormalized, zone.Spec.Email, serial))
 	if err != nil {
 		log.Errorf("edgecdnx: failed to create SOA record: %v", err)
 		return nil, err
