@@ -3,12 +3,13 @@ module github.com/EdgeCDN-X/edgecdnx-plugin
 go 1.25.0
 
 require (
-	github.com/EdgeCDN-X/edgecdnx-controller v0.17.0
+	github.com/EdgeCDN-X/edgecdnx-controller v0.22.0
 	github.com/ancientlore/go-avltree v1.0.3
 	github.com/coredns/caddy v1.1.4
 	github.com/coredns/coredns v1.14.1
-	github.com/miekg/dns v1.1.70
+	github.com/miekg/dns v1.1.72
 	github.com/prometheus/client_golang v1.23.2
+	google.golang.org/grpc v1.78.0
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0
 	sigs.k8s.io/controller-runtime v0.21.0
@@ -63,7 +64,6 @@ require (
 	golang.org/x/tools v0.40.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b // indirect
-	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
