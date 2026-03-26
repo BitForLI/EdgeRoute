@@ -27,11 +27,13 @@ For each DNS query:
 - Determine a location:
   - First from prefix routing (`PrefixList` CRDs using source IP or EDNS client subnet).
   - If prefix is missing or cache type is not available there, use geo lookup.
+- If the location has active Prometheus alerts (`status.alerts` is non-empty), skip it and try fallback locations instead.
 - Select a node in that location:
   - Filter by cache node group.
   - Skip nodes in maintenance mode.
   - Use deterministic hash on query name.
   - Enforce IPv4/IPv6 health condition based on query type.
+  - Skip nodes with active Prometheus alerts (`status.nodeStatus[node].alerts` is non-empty); try next node in hash order.
 - If no healthy node in the chosen location, iterate configured fallback locations.
   - Choose response mode:
     - Use `DNSResponseType` by default.
@@ -202,6 +204,8 @@ At present, the counter is declared but not incremented in request handling code
 - Verify Location has node group matching Service cache.
 - Verify health conditions for selected `A`/`AAAA` path.
 - Verify PrefixList destination location exists.
+- Check `status.alerts` on the Location — any active Prometheus alert causes the location to be skipped and fallback locations to be tried.
+- Check `status.nodeStatus[node].alerts` on each node — any active Prometheus alert on a node removes it from the candidate pool for that request.
 
 ### Direct node hostname does not resolve
 
