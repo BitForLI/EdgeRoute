@@ -58,6 +58,17 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 		return infrastructurev1alpha1.NodeSpec{}, fmt.Errorf("Location %s is in maintenance mode", location.Name)
 	}
 
+	if location.Status.Alerts != nil && len(location.Status.Alerts) > 0 {
+		log.Debugf("edgecdnxgeolookup: Location %s has active alerts. %v", location.Name, func() []string {
+			alertNames := make([]string, 0, len(location.Status.Alerts))
+			for _, alert := range location.Status.Alerts {
+				alertNames = append(alertNames, alert.AlertName)
+			}
+			return alertNames
+		}())
+		return infrastructurev1alpha1.NodeSpec{}, fmt.Errorf("Location %s has active alerts", location.Name)
+	}
+
 	// Add only nodes which are not in maintenance mode and match the cache filter
 	for _, ng := range location.Spec.NodeGroups {
 		if ng.Name == filters.Cache {
@@ -103,11 +114,23 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 				filteredNodes = slices.Delete(filteredNodes, nodeIndex, nodeIndex+1)
 				continue
 			}
-			return filteredNodes[nodeIndex], nil
 		} else {
 			log.Debugf("edgecdnxgeolookup: Node %s has no health check condition for qtype %d, assuming healthy", nodeName, filters.Qtype)
-			return filteredNodes[nodeIndex], nil
 		}
+
+		if nodeStatus.Alerts != nil && len(nodeStatus.Alerts) > 0 {
+			log.Debugf("edgecdnxgeolookup: Node %s has active alerts, trying next node. %v", nodeName, func() []string {
+				alertNames := make([]string, 0, len(nodeStatus.Alerts))
+				for _, alert := range nodeStatus.Alerts {
+					alertNames = append(alertNames, alert.AlertName)
+				}
+				return alertNames
+			}())
+			filteredNodes = slices.Delete(filteredNodes, nodeIndex, nodeIndex+1)
+			continue
+		}
+
+		return filteredNodes[nodeIndex], nil
 	}
 }
 
