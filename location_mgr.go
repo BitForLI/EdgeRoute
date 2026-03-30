@@ -38,6 +38,12 @@ type HashFilters struct {
 	Qtype uint16
 }
 
+type FilteredNodeWithMeta struct {
+	Node         infrastructurev1alpha1.NodeSpec
+	LocationName string
+	NodeStatus   infrastructurev1alpha1.NodeInstanceStatus
+}
+
 func (l LocationManager) GetLocationByName(name string) (infrastructurev1alpha1.Location, error) {
 	l.Sync.RLock()
 	defer l.Sync.RUnlock()
@@ -50,12 +56,12 @@ func (l LocationManager) GetLocationByName(name string) (infrastructurev1alpha1.
 	return location, nil
 }
 
-func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, hashInput string, filters HashFilters) (infrastructurev1alpha1.NodeSpec, error) {
-	filteredNodes := make([]infrastructurev1alpha1.NodeSpec, 0)
+func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, hashInput string, filters HashFilters) (FilteredNodeWithMeta, error) {
+	filteredNodes := make([]FilteredNodeWithMeta, 0)
 
 	if location.Spec.MaintenanceMode {
 		log.Debug(fmt.Sprintf("edgecdnxgeolookup: Location %s is in maintenance mode", location.Name))
-		return infrastructurev1alpha1.NodeSpec{}, fmt.Errorf("Location %s is in maintenance mode", location.Name)
+		return FilteredNodeWithMeta{}, fmt.Errorf("Location %s is in maintenance mode", location.Name)
 	}
 
 	if location.Status.Alerts != nil && len(location.Status.Alerts) > 0 {
@@ -66,7 +72,7 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 			}
 			return alertNames
 		}())
-		return infrastructurev1alpha1.NodeSpec{}, fmt.Errorf("Location %s has active alerts", location.Name)
+		return FilteredNodeWithMeta{}, fmt.Errorf("Location %s has active alerts", location.Name)
 	}
 
 	// Add only nodes which are not in maintenance mode and match the cache filter
@@ -76,29 +82,108 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 				if node.MaintenanceMode {
 					continue
 				}
-				filteredNodes = append(filteredNodes, node)
+
+				nodeStatus, exists := location.Status.NodeStatus[node.Name]
+				if !exists {
+					nodeStatus = infrastructurev1alpha1.NodeInstanceStatus{
+						Conditions: []infrastructurev1alpha1.NodeCondition{},
+						Alerts:     []infrastructurev1alpha1.PrometheusAlertStatus{},
+					}
+				}
+
+				filteredNodes = append(filteredNodes, FilteredNodeWithMeta{
+					Node:         node,
+					LocationName: location.Name,
+					NodeStatus:   nodeStatus,
+				})
 			}
 		}
 	}
 
+	locations_raw, err := l.Informer.GetIndexer().ByIndex("byParent", location.Name)
+	if err != nil {
+		log.Errorf("edgecdnxgeolookup: failed to get child locations for location %s: %v", location.Name, err)
+	} else {
+		for _, loc := range locations_raw {
+			childLocationUnstructured, ok := loc.(*unstructured.Unstructured)
+			if !ok {
+				log.Errorf("edgecdnxgeolookup: expected Location object, got %T", loc)
+				continue
+			}
+
+			temp, err := json.Marshal(childLocationUnstructured.Object)
+			if err != nil {
+				log.Errorf("edgecdnxgeolookup: failed to marshal child location object: %v", err)
+				continue
+			}
+			childLocation := &infrastructurev1alpha1.Location{}
+			err = json.Unmarshal(temp, childLocation)
+			if err != nil {
+				log.Errorf("edgecdnxgeolookup: failed to unmarshal child location object: %v", err)
+				continue
+			}
+
+			if childLocation.Spec.MaintenanceMode {
+				log.Debug(fmt.Sprintf("edgecdnxgeolookup: Child Location %s is in maintenance mode, skipping", childLocation.Name))
+				continue
+			}
+
+			if childLocation.Status.Alerts != nil && len(childLocation.Status.Alerts) > 0 {
+				log.Debugf("edgecdnxgeolookup: Child Location %s has active alerts, skipping. %v", childLocation.Name, func() []string {
+					alertNames := make([]string, 0, len(childLocation.Status.Alerts))
+					for _, alert := range childLocation.Status.Alerts {
+						alertNames = append(alertNames, alert.AlertName)
+					}
+					return alertNames
+				}())
+				continue
+			}
+
+			for _, ng := range childLocation.Spec.NodeGroups {
+				if ng.Name == filters.Cache {
+					for _, node := range ng.Nodes {
+						if node.MaintenanceMode {
+							continue
+						}
+
+						nodeStatus, exists := childLocation.Status.NodeStatus[node.Name]
+						if !exists {
+							nodeStatus = infrastructurev1alpha1.NodeInstanceStatus{
+								Conditions: []infrastructurev1alpha1.NodeCondition{},
+								Alerts:     []infrastructurev1alpha1.PrometheusAlertStatus{},
+							}
+						}
+
+						filteredNodes = append(filteredNodes, FilteredNodeWithMeta{
+							Node:         node,
+							LocationName: childLocation.Name,
+							NodeStatus:   nodeStatus,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	log.Debugf("edgecdnxgeolookup: Found %d nodes in location %s matching cache %s", len(filteredNodes), location.Name, filters.Cache)
+
 	for {
 		if len(filteredNodes) == 0 {
-			return infrastructurev1alpha1.NodeSpec{}, fmt.Errorf("No healthy nodes found in location %s with cache %s", location.Name, filters.Cache)
+			return FilteredNodeWithMeta{}, fmt.Errorf("No healthy nodes found in location %s with cache %s", location.Name, filters.Cache)
 		}
 
 		hash := md5.Sum([]byte(hashInput))
 		lastFourBytes := hash[len(hash)-4:]
 		hashValue := uint32(lastFourBytes[0])<<24 | uint32(lastFourBytes[1])<<16 | uint32(lastFourBytes[2])<<8 | uint32(lastFourBytes[3])
 		nodeIndex := int(hashValue % uint32(len(filteredNodes)))
-		nodeName := filteredNodes[nodeIndex].Name
+		node := filteredNodes[nodeIndex]
 
-		nodeStatus, exists := location.Status.NodeStatus[nodeName] // Access to ensure node status exists
-		if !exists {
-			log.Debug(fmt.Sprintf("edgecdnxgeolookup: Node %s has no status, assuming healthy", nodeName))
-			return filteredNodes[nodeIndex], nil
+		if node.NodeStatus.Conditions == nil || len(node.NodeStatus.Conditions) == 0 {
+			log.Debugf("edgecdnxgeolookup: Node %s in location %s has no status, assuming healthy", node.Node.Name, node.LocationName)
+			return node, nil
 		}
 
-		if idx := slices.IndexFunc(nodeStatus.Conditions, func(c infrastructurev1alpha1.NodeCondition) bool {
+		if idx := slices.IndexFunc(node.NodeStatus.Conditions, func(c infrastructurev1alpha1.NodeCondition) bool {
 			switch filters.Qtype {
 			case dns.TypeA:
 				return c.Type == infrastructurev1alpha1.IPV4HealthCheckSuccessful
@@ -108,20 +193,20 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 				return false
 			}
 		}); idx != -1 {
-			condition := nodeStatus.Conditions[idx]
+			condition := node.NodeStatus.Conditions[idx]
 			if !condition.Status {
-				log.Debugf("edgecdnxgeolookup: Node %s is not healthy for qtype %d, trying next node", nodeName, filters.Qtype)
+				log.Debugf("edgecdnxgeolookup: Node %s is not healthy for qtype %d, trying next node", node.Node.Name, filters.Qtype)
 				filteredNodes = slices.Delete(filteredNodes, nodeIndex, nodeIndex+1)
 				continue
 			}
 		} else {
-			log.Debugf("edgecdnxgeolookup: Node %s has no health check condition for qtype %d, assuming healthy", nodeName, filters.Qtype)
+			log.Debugf("edgecdnxgeolookup: Node %s has no health check condition for qtype %d, assuming healthy", node.Node.Name, filters.Qtype)
 		}
 
-		if nodeStatus.Alerts != nil && len(nodeStatus.Alerts) > 0 {
-			log.Debugf("edgecdnxgeolookup: Node %s has active alerts, trying next node. %v", nodeName, func() []string {
-				alertNames := make([]string, 0, len(nodeStatus.Alerts))
-				for _, alert := range nodeStatus.Alerts {
+		if node.NodeStatus.Alerts != nil && len(node.NodeStatus.Alerts) > 0 {
+			log.Debugf("edgecdnxgeolookup: Node %s has active alerts, trying next node. %v", node.Node.Name, func() []string {
+				alertNames := make([]string, 0, len(node.NodeStatus.Alerts))
+				for _, alert := range node.NodeStatus.Alerts {
 					alertNames = append(alertNames, alert.AlertName)
 				}
 				return alertNames
@@ -311,6 +396,33 @@ func NewLocationManager(factory dynamicinformer.DynamicSharedInformerFactory, co
 			log.Infof("edgecdnxgeolookup: Deleted Location %s", location.Name)
 		},
 	})
+
+	err := locationInformer.GetIndexer().AddIndexers(cache.Indexers{
+		"byParent": func(obj any) ([]string, error) {
+			location, ok := obj.(*unstructured.Unstructured)
+			if !ok {
+				return []string{}, fmt.Errorf("expected Location object, got %T", obj)
+			}
+
+			temp, err := json.Marshal(location.Object)
+			if err != nil {
+				return []string{}, fmt.Errorf("failed to marshal location object: %v", err)
+			}
+			locationObj := &infrastructurev1alpha1.Location{}
+			err = json.Unmarshal(temp, locationObj)
+			if err != nil {
+				return []string{}, fmt.Errorf("failed to unmarshal location object: %v", err)
+			}
+
+			if locationObj.Spec.Parent != "" {
+				return []string{locationObj.Spec.Parent}, nil
+			}
+			return []string{}, nil
+		},
+	})
+	if err != nil {
+		log.Errorf("edgecdnxgeolookup: failed to add indexer to location informer: %v", err)
+	}
 
 	locationMgr.Informer = locationInformer
 

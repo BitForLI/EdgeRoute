@@ -145,6 +145,7 @@ func (e EdgeCDNX) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			return e.BuildNodeReponse(node, location.Name, A_AAAA, w, r)
 		}
 
+		// Standard request, find service based on qname and route to correct location based on geo lookup and prefix list routing
 		service, err := e.ServiceManager.GetService(qname)
 
 		if err == nil {
@@ -176,6 +177,26 @@ func (e EdgeCDNX) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			if err != nil {
 				log.Debug(fmt.Sprintf("edgecdnxgeolookup: Hashing error - %v", err))
 
+				if location.Spec.Parent != "" {
+					// If a parent location is specified, attempt to route to the parent location
+					parentLocation, err := e.LocationManager.GetLocationByName(location.Spec.Parent)
+					log.Debug(fmt.Sprintf("edgecdnxgeolookup: Falling back to parent location %s", location.Spec.Parent))
+					if err != nil {
+						log.Error(fmt.Sprintf("edgecdnxgeolookup: Fallback location %s not found", location.Spec.Parent))
+						return plugin.NextOrFailure(e.Name(), e.Next, ctx, w, r)
+					}
+
+					node, err := e.LocationManager.ApplyHash(&parentLocation, state.Name(), filter)
+					if err == nil {
+						log.Debug(fmt.Sprintf("edgecdnxgeolookup: Fallback to location %s successful", node.LocationName))
+						return e.BuildNodeReponse(node.Node, node.LocationName, responseType, w, r)
+					}
+					log.Debug(fmt.Sprintf("edgecdnxgeolookup: Fallback to location %s failed - %v", parentLocation.Name, err))
+
+					// Continue down the fallback chain with the parent location as the new location
+					location = parentLocation
+				}
+
 				for _, fbLoc := range location.Spec.FallbackLocations {
 					fallBackLocation, err := e.LocationManager.GetLocationByName(fbLoc)
 					log.Debug(fmt.Sprintf("edgecdnxgeolookup: Falling back to location %s", fbLoc))
@@ -185,8 +206,8 @@ func (e EdgeCDNX) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 					}
 					node, err := e.LocationManager.ApplyHash(&fallBackLocation, state.Name(), filter)
 					if err == nil {
-						log.Debug(fmt.Sprintf("edgecdnxgeolookup: Fallback to location %s successful", fbLoc))
-						return e.BuildNodeReponse(node, fbLoc, responseType, w, r)
+						log.Debug(fmt.Sprintf("edgecdnxgeolookup: Fallback to location %s successful", node.LocationName))
+						return e.BuildNodeReponse(node.Node, node.LocationName, responseType, w, r)
 					}
 					log.Debug(fmt.Sprintf("edgecdnxgeolookup: Fallback to location %s failed - %v", fbLoc, err))
 				}
@@ -195,7 +216,7 @@ func (e EdgeCDNX) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 				return plugin.NextOrFailure(e.Name(), e.Next, ctx, w, r)
 			}
 
-			return e.BuildNodeReponse(node, location.Name, responseType, w, r)
+			return e.BuildNodeReponse(node.Node, node.LocationName, responseType, w, r)
 		}
 	}
 

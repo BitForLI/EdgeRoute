@@ -9,8 +9,8 @@ It supports:
 - Direct node resolution for hostnames in the form `node.location.node.service`
 - Prefix-list routing (IP/CIDR to location)
 - Geo metadata lookup fallback when no prefix match is found
-- Hash-based node selection with health-aware filtering
-- Fallback locations when a primary location has no healthy node
+- Hash-based node selection with health-aware filtering, spanning child locations
+- Parent location fallback, followed by configured fallback locations, when a primary location has no healthy node
 - Authoritative zone responses for configured Zone CRDs (SOA/NS and related behavior)
 
 ## How It Works
@@ -28,13 +28,16 @@ For each DNS query:
   - First from prefix routing (`PrefixList` CRDs using source IP or EDNS client subnet).
   - If prefix is missing or cache type is not available there, use geo lookup.
 - If the location has active Prometheus alerts (`status.alerts` is non-empty), skip it and try fallback locations instead.
-- Select a node in that location:
-  - Filter by cache node group.
-  - Skip nodes in maintenance mode.
-  - Use deterministic hash on query name.
+- Build the candidate node pool for the chosen location:
+  - Include all nodes in the matching cache node group that are not in maintenance mode.
+  - Also include nodes from **child locations** (locations whose `spec.parent` equals the chosen location), provided the child location itself is not in maintenance mode and has no active alerts.
+  - Use deterministic hash on query name to select a node.
   - Enforce IPv4/IPv6 health condition based on query type.
   - Skip nodes with active Prometheus alerts (`status.nodeStatus[node].alerts` is non-empty); try next node in hash order.
-- If no healthy node in the chosen location, iterate configured fallback locations.
+- If no healthy node is found in the candidate pool:
+  - If the chosen location has a `spec.parent`, try that parent location next (same hash/filter logic).
+  - If the parent also has no healthy node, continue with the parent's `spec.fallbackLocations`.
+  - Otherwise (no parent), iterate the chosen location's `spec.fallbackLocations` directly.
   - Choose response mode:
     - Use `DNSResponseType` by default.
     - If gRPC incoming metadata is present in request context, use `GRPCResponseType` instead.
