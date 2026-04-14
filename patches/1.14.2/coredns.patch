@@ -38,10 +38,18 @@ index 1506e553e..d3dcb7dd8 100644
 +replace github.com/EdgeCDN-X/edgecdnx-plugin => ../
 \ No newline at end of file
 diff --git a/plugin.cfg b/plugin.cfg
-index 0d735cef2..3cad88353 100644
+index 0d735cef2..7ec0c61f9 100644
 --- a/plugin.cfg
 +++ b/plugin.cfg
-@@ -77,3 +77,4 @@ on:github.com/coredns/caddy/onevent
+@@ -24,6 +24,7 @@ metadata:metadata
+ geoip:geoip
+ cancel:cancel
+ tls:tls
++proxyproto:proxyproto
+ quic:quic
+ grpc_server:grpc_server
+ https:https
+@@ -77,3 +78,4 @@ on:github.com/coredns/caddy/onevent
  sign:sign
  view:view
  nomad:nomad
