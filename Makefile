@@ -1,4 +1,4 @@
-COREDNS_VERSION ?= 1.14.1
+COREDNS_VERSION ?= 1.14.2
 COREDNS_SOURCE_URL ?= https://github.com/coredns/coredns/archive/refs/tags/v$(COREDNS_VERSION).tar.gz
 VERSION_SUFFIX ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 

@@ -1,8 +1,8 @@
 name: Build CoreDNS with Patches
 
 env:
-  COREDNS_VERSION: '1.14.1'
-  COREDNS_SOURCE_URL: 'https://github.com/coredns/coredns/archive/refs/tags/v1.14.1.tar.gz'
+  COREDNS_VERSION: '1.14.2'
+  COREDNS_SOURCE_URL: 'https://github.com/coredns/coredns/archive/refs/tags/v1.14.2.tar.gz'
 
 on:
   push:
@@ -13,15 +13,15 @@ on:
   workflow_dispatch:
     inputs:
       coredns_version:
-        description: 'CoreDNS version to build (e.g., 1.14.1)'
+        description: 'CoreDNS version to build (e.g., 1.14.2)'
         required: false
         type: string
-        default: '1.14.1'
+        default: '1.14.2'
       source_url:
         description: 'URL to CoreDNS tar.gz source code'
         required: false
         type: string
-        default: 'https://github.com/coredns/coredns/archive/refs/tags/v1.14.1.tar.gz'
+        default: 'https://github.com/coredns/coredns/archive/refs/tags/v1.14.2.tar.gz'
 
 jobs:
   build:
@@ -44,11 +44,11 @@ jobs:
           SOURCE_URL="${{ inputs.source_url }}"
 
           if [ -z "$COREDNS_VERSION" ]; then
-            COREDNS_VERSION="1.14.1"
+            COREDNS_VERSION="1.14.2"
           fi
 
           if [ -z "$SOURCE_URL" ]; then
-            SOURCE_URL="https://github.com/coredns/coredns/archive/refs/tags/v1.14.1.tar.gz"
+            SOURCE_URL="https://github.com/coredns/coredns/archive/refs/tags/v1.14.2.tar.gz"
           fi
 
           echo "COREDNS_VERSION=$COREDNS_VERSION" >> $GITHUB_ENV
@@ -60,7 +60,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
       
       - name: Download CoreDNS source
         run: |
