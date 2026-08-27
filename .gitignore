@@ -1,5 +1,6 @@
 coredns.tar.gz
 coredns-*
+/coredns
 .tools/
 .tmp/
 bin/

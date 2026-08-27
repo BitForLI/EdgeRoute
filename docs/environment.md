@@ -4,6 +4,9 @@
 
 - Go 1.25.0, matching `go.mod`
 - CoreDNS 1.14.2, matching `Makefile`
+- kind 0.33.0
+- Kubernetes node image `kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5`
+- Helm 3.21.4
 - Windows amd64 local host
 - Upstream commits listed in `UPSTREAM.md`
 
@@ -37,12 +40,27 @@ go test ./...  exit 0; no upstream test files
 go build ./... exit 0
 ```
 
-## Missing local infrastructure
+## Verified local infrastructure
 
-At baseline time:
+- Docker Engine 29.0.1 is running through Docker Desktop.
+- Portable kind and Helm binaries live under `.tools/`; published checksums were verified.
+- The `edgeroute` kind cluster has one control-plane and two workers, all `Ready` on Kubernetes 1.36.1.
+- Namespaces `edge-system`, `edge-data`, `monitoring`, and `loadtest` exist.
+- The five pinned EdgeCDN-X CRDs are installed from `edgecdnx-controller/config/crd`.
+- Host `make` is not required: the upstream Makefile is executed inside the pinned `golang:1.25.0-bookworm` build container with `patch` installed.
 
-- Docker CLI was installed, but the Docker service was not running;
-- `kubectl` was available through Docker Desktop;
-- `kind`, `helm`, and `make` were not installed.
+The baseline image is `edgeroute-coredns:upstream-1dd32f2` with local image ID:
 
-CoreDNS image build, kind cluster creation, CRD installation, and HLS deployment are therefore not yet claimed as verified.
+```text
+sha256:6aeb4f5d8f8d49c9b8dc9a804956be9f0155c525afc561bacb3322ef4f9ec917
+```
+
+Observed runtime evidence:
+
+```text
+CoreDNS-1.14.2-edgecdnx-upstream-1dd32f2
+linux/amd64, go1.25.0
+plugin list contains: edgecdnx
+```
+
+The image has been loaded into all three kind nodes. This is a local reproducibility baseline, not evidence of production or cross-region deployment.
