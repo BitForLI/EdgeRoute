@@ -55,6 +55,19 @@ spec:
             limits: {cpu: 250m, memory: 128Mi}
           volumeMounts:
             - {name: config, mountPath: /config, readOnly: true}
+        - name: nginx-exporter
+          image: nginx/nginx-prometheus-exporter:1.5.1@sha256:9f6d963bb2b19d706d401cc3e2c3ea8de2f1c471b96a2156ca45e76f650b1625
+          imagePullPolicy: IfNotPresent
+          args: [--nginx.scrape-uri=http://127.0.0.1:8080/stub_status]
+          ports:
+            - {name: nginx-metrics, containerPort: 9113}
+          readinessProbe:
+            httpGet: {path: /metrics, port: nginx-metrics}
+            initialDelaySeconds: 2
+            periodSeconds: 2
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 200m, memory: 64Mi}
       volumes:
         - name: config
           configMap: {name: edge-config}

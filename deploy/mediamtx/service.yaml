@@ -5,6 +5,9 @@ metadata:
   labels:
     app.kubernetes.io/name: mediamtx
     app.kubernetes.io/part-of: edgeroute
+    node: origin
+    location: origin
+    service: hls-demo
 spec:
   selector:
     app.kubernetes.io/name: mediamtx

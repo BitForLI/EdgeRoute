@@ -1,0 +1,14 @@
+.git
+.github
+.tools
+.tmp
+coredns
+coredns-*
+coredns.tar.gz
+bin
+results
+EdgeRoute-deps
+*.md
+deploy
+docs
+scripts

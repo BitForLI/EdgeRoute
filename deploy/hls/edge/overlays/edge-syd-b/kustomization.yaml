@@ -9,6 +9,7 @@ configMapGenerator:
 labels:
   - pairs: {edgeroute.io/node: edge-syd-b, edgeroute.io/location: sydney, edgeroute.io/service: hls-demo}
     includeSelectors: true
+  - pairs: {node: edge-syd-b, location: sydney, service: hls-demo}
 patches:
   - target: {kind: Deployment, name: edge}
     patch: |-

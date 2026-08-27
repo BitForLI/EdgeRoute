@@ -12,3 +12,4 @@ spec:
   ports:
     - {name: http, port: 8080, targetPort: http}
     - {name: toxiproxy-api, port: 8474, targetPort: proxy-api}
+    - {name: nginx-metrics, port: 9113, targetPort: nginx-metrics}
