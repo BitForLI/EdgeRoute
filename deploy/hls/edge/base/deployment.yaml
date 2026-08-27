@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge
+  labels:
+    app.kubernetes.io/name: edge
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: edgeroute
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: edge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: edge
+        app.kubernetes.io/component: cache
+        app.kubernetes.io/part-of: edgeroute
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.31.4-alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
+          imagePullPolicy: IfNotPresent
+          args: [nginx, -c, /config/nginx.conf, -g, 'daemon off;']
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 2
+            periodSeconds: 2
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+            - {name: cache, mountPath: /var/cache/nginx}
+        - name: toxiproxy
+          image: ghcr.io/shopify/toxiproxy:2.12.0@sha256:9378ed52a28bc50edc1350f936f518f31fa95f0d15917d6eb40b8e376d1a214e
+          imagePullPolicy: IfNotPresent
+          args:
+            - -host=0.0.0.0
+            - -config=/config/toxiproxy.json
+            - -proxy-metrics
+            - -runtime-metrics
+          ports:
+            - {name: proxy-api, containerPort: 8474}
+            - {name: origin-proxy, containerPort: 8666}
+          readinessProbe:
+            tcpSocket: {port: origin-proxy}
+            initialDelaySeconds: 2
+            periodSeconds: 2
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: edge-config}
+        - name: cache
+          emptyDir: {sizeLimit: 256Mi}

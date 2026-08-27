@@ -1,24 +1,12 @@
 apiVersion: infrastructure.edgecdnx.com/v1alpha1
 kind: Location
 metadata:
-  name: lab-global
-  namespace: edge-system
-  labels:
-    app.kubernetes.io/part-of: edgeroute
-spec:
-  geoLookup:
-    weight: 0
-    attributes: {}
----
-apiVersion: infrastructure.edgecdnx.com/v1alpha1
-kind: Location
-metadata:
   name: sydney
   namespace: edge-system
   labels:
     app.kubernetes.io/part-of: edgeroute
 spec:
-  parent: lab-global
+  fallbackLocations: [singapore]
   geoLookup:
     weight: 50
     attributes:
@@ -30,8 +18,10 @@ spec:
     - name: hls
       flavor: nginx
       nodes:
-        - name: edge-sydney
+        - name: edge-syd-a
           ipv4: 10.96.10.11
+        - name: edge-syd-b
+          ipv4: 10.96.10.12
       nodeSelector:
         edge-role: sydney
       cacheConfig:
@@ -49,7 +39,6 @@ metadata:
   labels:
     app.kubernetes.io/part-of: edgeroute
 spec:
-  parent: lab-global
   geoLookup:
     weight: 50
     attributes:
@@ -61,41 +50,10 @@ spec:
     - name: hls
       flavor: nginx
       nodes:
-        - name: edge-singapore
-          ipv4: 10.96.10.12
-      nodeSelector:
-        edge-role: singapore
-      cacheConfig:
-        name: hls
-        path: /var/cache/nginx
-        keysZone: 32m
-        inactive: 10m
-        maxSize: 256m
----
-apiVersion: infrastructure.edgecdnx.com/v1alpha1
-kind: Location
-metadata:
-  name: frankfurt
-  namespace: edge-system
-  labels:
-    app.kubernetes.io/part-of: edgeroute
-spec:
-  parent: lab-global
-  geoLookup:
-    weight: 50
-    attributes:
-      geoip/continent/code:
-        weight: 1000
-        values:
-          - value: EU
-  nodeGroups:
-    - name: hls
-      flavor: nginx
-      nodes:
-        - name: edge-frankfurt
+        - name: edge-sin-a
           ipv4: 10.96.10.13
       nodeSelector:
-        edge-role: frankfurt
+        edge-role: singapore
       cacheConfig:
         name: hls
         path: /var/cache/nginx
