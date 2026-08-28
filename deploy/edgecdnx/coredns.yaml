@@ -50,6 +50,7 @@ data:
         soa ns1
         recordttl 30
         defaultweight 100
+        routingmode adaptive
         dnsresponsetype A_AAAA
         grpcresponsetype CNAME
       }

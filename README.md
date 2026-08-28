@@ -105,6 +105,7 @@ edgecdnx [ZONES...] {
   ns <ns-hostname> <ipv4>
   recordttl <seconds>
   defaultweight <1-100>
+  routingmode <adaptive|deterministic>
   dnsresponsetype <CNAME|A_AAAA>
   grpcresponsetype <CNAME|A_AAAA>
 }
@@ -119,6 +120,7 @@ Directives:
 | `ns` | Recommended (repeatable) | empty | Adds NS and NS A records for each served zone. Format: `ns <hostname> <ipv4>`. |
 | `recordttl` | No | `60` | TTL (seconds) used for generated `A`/`AAAA` node answers. |
 | `defaultweight` | No | `100` | Static weight used when a node has no NodeQuality entry or the CRD is absent. |
+| `routingmode` | No | `adaptive` | `adaptive` uses NodeQuality-weighted rendezvous; `deterministic` preserves the upstream static modulo-hash path as an experiment baseline. |
 | `dnsresponsetype` | No | `A_AAAA` | Allowed values: `CNAME`, `A_AAAA`. Used for normal DNS-originated dynamic responses. |
 | `grpcresponsetype` | No | `CNAME` | Allowed values: `CNAME`, `A_AAAA`. Parsed and stored in plugin state. |
 
@@ -145,6 +147,7 @@ Example:
     ns ns2.edge.example.com. 203.0.113.11
     recordttl 60
     defaultweight 100
+    routingmode adaptive
     dnsresponsetype A_AAAA
     grpcresponsetype CNAME
   }

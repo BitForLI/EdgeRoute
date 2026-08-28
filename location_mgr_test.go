@@ -116,6 +116,49 @@ func TestLocationManagerAllZeroWeightsReturnsNoCandidate(t *testing.T) {
 	}
 }
 
+func TestLocationManagerDeterministicBaselineIgnoresNodeQuality(t *testing.T) {
+	location := testLocation("sydney",
+		testNode("edge-a", "192.0.2.10", "2001:db8::10"),
+		testNode("edge-b", "192.0.2.20", "2001:db8::20"),
+	)
+	manager := testLocationManager(100, []routing.NodeQuality{
+		{Location: "sydney", Node: "edge-a", EffectiveWeight: 0, State: "Ejected"},
+		{Location: "sydney", Node: "edge-b", EffectiveWeight: 100, State: "Healthy"},
+	})
+	manager.Config.RoutingMode = RoutingModeDeterministic
+
+	seen := map[string]bool{}
+	for i := 0; i < 1_000; i++ {
+		selected, err := manager.ApplyHash(&location, fmt.Sprintf("baseline-%d", i), HashFilters{Cache: "hls", Qtype: dns.TypeA})
+		if err != nil {
+			t.Fatalf("deterministic baseline selection: %v", err)
+		}
+		seen[selected.Node.Name] = true
+	}
+	if !seen["edge-a"] || !seen["edge-b"] {
+		t.Fatalf("baseline unexpectedly consumed NodeQuality: %#v", seen)
+	}
+}
+
+func TestLocationManagerDeterministicBaselineKeepsActiveHealthFilter(t *testing.T) {
+	location := testLocation("sydney",
+		testNode("unhealthy", "192.0.2.10", "2001:db8::10"),
+		testNode("healthy", "192.0.2.20", "2001:db8::20"),
+	)
+	location.Status.NodeStatus = map[string]infrastructurev1alpha1.NodeInstanceStatus{
+		"unhealthy": {Conditions: []infrastructurev1alpha1.NodeCondition{{Type: infrastructurev1alpha1.IPV4HealthCheckSuccessful, Status: false}}},
+	}
+	manager := testLocationManagerWithoutQuality(100)
+	manager.Config.RoutingMode = RoutingModeDeterministic
+
+	for i := 0; i < 1_000; i++ {
+		selected, err := manager.ApplyHash(&location, fmt.Sprintf("health-%d", i), HashFilters{Cache: "hls", Qtype: dns.TypeA})
+		if err != nil || selected.Node.Name != "healthy" {
+			t.Fatalf("baseline selected unhealthy node: node=%q err=%v", selected.Node.Name, err)
+		}
+	}
+}
+
 func testLocationManager(staticWeight int32, entries []routing.NodeQuality) *LocationManager {
 	manager := testLocationManagerWithoutQuality(staticWeight)
 	quality := testNodeQualityManager(time.Now())
@@ -131,7 +174,7 @@ func testLocationManager(staticWeight int32, entries []routing.NodeQuality) *Loc
 func testLocationManagerWithoutQuality(staticWeight int32) *LocationManager {
 	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(client, 0)
-	return NewLocationManager(factory, LocationManagerConfiguration{Namespace: "default", RecrodTTL: 60, StaticDefaultWeight: staticWeight}, nil)
+	return NewLocationManager(factory, LocationManagerConfiguration{Namespace: "default", RecrodTTL: 60, StaticDefaultWeight: staticWeight, RoutingMode: RoutingModeAdaptive}, nil)
 }
 
 func testLocation(name string, nodes ...infrastructurev1alpha1.NodeSpec) infrastructurev1alpha1.Location {

@@ -2,6 +2,7 @@ package edgecdnxplugin
 
 import (
 	"context"
+	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,7 +27,13 @@ type LocationManagerConfiguration struct {
 	Namespace           string
 	RecrodTTL           uint32
 	StaticDefaultWeight int32
+	RoutingMode         string
 }
+
+const (
+	RoutingModeAdaptive      = "adaptive"
+	RoutingModeDeterministic = "deterministic"
+)
 
 type LocationManager struct {
 	fac       dynamicinformer.DynamicSharedInformerFactory
@@ -173,6 +180,10 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 
 	log.Debugf("edgecdnxgeolookup: Found %d nodes in location %s matching cache %s", len(filteredNodes), location.Name, filters.Cache)
 
+	if l.Config.RoutingMode == RoutingModeDeterministic {
+		return l.selectDeterministicBaseline(location.Name, hashInput, filters, filteredNodes)
+	}
+
 	snapshot := routing.EmptySnapshot()
 	if l.Quality != nil {
 		snapshot = l.Quality.Snapshot()
@@ -222,6 +233,40 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 	}
 	selected := eligible[selectedID]
 	routingTotal.WithLabelValues(selected.LocationName, selected.Node.Name, "selected").Inc()
+	return selected, nil
+}
+
+// selectDeterministicBaseline preserves the upstream modulo-hash control path
+// for reproducible A/B experiments. It intentionally ignores NodeQuality while
+// retaining the upstream active-health and alert safety filters.
+func (l LocationManager) selectDeterministicBaseline(locationName, hashInput string, filters HashFilters, nodes []FilteredNodeWithMeta) (FilteredNodeWithMeta, error) {
+	eligible := make([]FilteredNodeWithMeta, 0, len(nodes))
+	for _, node := range nodes {
+		if !supportsQueryType(node.Node, filters.Qtype) {
+			nodeUnavailableTotal.WithLabelValues(node.Node.Name, "address_family").Inc()
+			continue
+		}
+		if !nodeHealthyForQuery(node.NodeStatus, filters.Qtype) {
+			nodeUnavailableTotal.WithLabelValues(node.Node.Name, "active_health").Inc()
+			continue
+		}
+		if len(node.NodeStatus.Alerts) > 0 {
+			nodeUnavailableTotal.WithLabelValues(node.Node.Name, "prometheus_alert").Inc()
+			continue
+		}
+		eligible = append(eligible, node)
+	}
+	if len(eligible) == 0 {
+		routingTotal.WithLabelValues(locationName, "", "no_candidate").Inc()
+		return FilteredNodeWithMeta{}, fmt.Errorf("no healthy nodes found in location %s with cache %s", locationName, filters.Cache)
+	}
+
+	// This is the upstream EdgeCDN-X baseline algorithm, not a security hash.
+	hash := md5.Sum([]byte(hashInput))
+	lastFourBytes := hash[len(hash)-4:]
+	hashValue := uint32(lastFourBytes[0])<<24 | uint32(lastFourBytes[1])<<16 | uint32(lastFourBytes[2])<<8 | uint32(lastFourBytes[3])
+	selected := eligible[int(hashValue%uint32(len(eligible)))]
+	routingTotal.WithLabelValues(selected.LocationName, selected.Node.Name, "baseline_selected").Inc()
 	return selected, nil
 }
 

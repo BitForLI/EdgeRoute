@@ -67,6 +67,7 @@ func setup(c *caddy.Controller) error {
 	var ns []NSRecord = make([]NSRecord, 0)
 	var recordttl uint32 = 60
 	var staticDefaultWeight int32 = 100
+	var routingMode = RoutingModeAdaptive
 	var dnsResponseType ResponseType = A_AAAA
 	var grpcResponseType ResponseType = CNAME
 
@@ -102,6 +103,12 @@ func setup(c *caddy.Controller) error {
 				return plugin.Error("edgecdnx", fmt.Errorf("defaultweight must be an integer within [1,100]"))
 			}
 			staticDefaultWeight = int32(raw)
+		}
+		if val == "routingmode" {
+			if len(args) != 1 || (args[0] != RoutingModeAdaptive && args[0] != RoutingModeDeterministic) {
+				return plugin.Error("edgecdnx", fmt.Errorf("routingmode must be one of: %s, %s", RoutingModeAdaptive, RoutingModeDeterministic))
+			}
+			routingMode = args[0]
 		}
 		if val == "dnsresponsetype" {
 			if len(args) != 1 {
@@ -162,6 +169,7 @@ func setup(c *caddy.Controller) error {
 		Namespace:           namespace,
 		RecrodTTL:           recordttl,
 		StaticDefaultWeight: staticDefaultWeight,
+		RoutingMode:         routingMode,
 	}, nodeQualityManager)
 
 	factoryCloseChan := make(chan struct{})

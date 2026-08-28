@@ -5,3 +5,7 @@ coredns-*
 .tmp/
 bin/
 results/
+__pycache__/
+*.pyc
+!experiments/results/
+!experiments/results/**
