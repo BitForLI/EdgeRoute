@@ -13,8 +13,14 @@ all: build
 
 build: $(COREDNS_DIR)/$(BINARY)
 
-$(COREDNS_DIR)/$(BINARY): $(COREDNS_DIR)/.patched
-	cd $(COREDNS_DIR) && go mod tidy && make
+$(COREDNS_DIR)/$(BINARY): $(COREDNS_DIR)/.patched version
+	cd $(COREDNS_DIR) && CGO_ENABLED=0 go mod tidy && CGO_ENABLED=0 make
+
+version: $(COREDNS_DIR)/.patched
+	@NEW_VERSION="$(COREDNS_VERSION)-edgecdnx-$(VERSION_SUFFIX)"; \
+	echo "Setting CoreDNS version to: $$NEW_VERSION"; \
+	sed -i.bak 's/CoreVersion = "[^"]*"/CoreVersion = "'"$$NEW_VERSION"'"/' $(COREDNS_DIR)/coremain/version.go && \
+	rm -f $(COREDNS_DIR)/coremain/version.go.bak
 
 $(COREDNS_DIR)/.patched: $(COREDNS_DIR)/.extracted
 	@if [ ! -f "$(PATCH_FILE)" ]; then \

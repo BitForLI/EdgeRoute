@@ -102,12 +102,16 @@ spec:
             limits: {cpu: 500m, memory: 256Mi}
           securityContext:
             allowPrivilegeEscalation: false
-            capabilities: {drop: [ALL]}
+            capabilities:
+              drop: [ALL]
+              add: [NET_BIND_SERVICE]
             readOnlyRootFilesystem: true
           volumeMounts:
             - {name: config, mountPath: /etc/coredns, readOnly: true}
       securityContext:
         runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
         seccompProfile: {type: RuntimeDefault}
       volumes:
         - name: config

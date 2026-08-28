@@ -3,6 +3,7 @@
 .tools
 .tmp
 coredns
+!coredns
 coredns-*
 coredns.tar.gz
 bin
