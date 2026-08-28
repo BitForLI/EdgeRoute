@@ -23,13 +23,17 @@ spec:
           - {name: ndots, value: "1"}
       containers:
         - name: k6
-          image: grafana/k6:1.8.0
-          imagePullPolicy: IfNotPresent
+          image: edgeroute-k6:1.8.0
+          imagePullPolicy: Never
+          command: [sh, -c]
           args:
-            - run
-            - --summary-export=/results/k6-summary.json
-            - --out=json=/results/k6-metrics.jsonl
-            - /scripts/hls.js
+            - |-
+              set +e
+              k6 run --summary-export=/results/k6-summary.json --out=json=/results/k6-metrics.jsonl /scripts/hls.js
+              code=$?
+              echo "$code" > /results/exit-code
+              touch /results/complete
+              sleep 600
           envFrom:
             - configMapRef: {name: edgeroute-k6-run}
           resources:

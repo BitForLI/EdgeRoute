@@ -16,7 +16,12 @@ import matplotlib.pyplot as plt
 
 def metric(summary: dict, name: str, value: str, default: float = 0.0) -> float:
     try:
-        return float(summary["metrics"][name]["values"][value])
+        payload = summary["metrics"][name]
+        if "values" in payload:
+            return float(payload["values"][value])
+        if value == "rate" and "value" in payload:
+            return float(payload["value"])
+        return float(payload[value])
     except (KeyError, TypeError, ValueError):
         return default
 

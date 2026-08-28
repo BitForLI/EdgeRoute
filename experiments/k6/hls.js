@@ -25,6 +25,12 @@ export const options = {
     { duration: __ENV.RECOVERY_DURATION || '2m', target: targetVUs },
   ],
   gracefulStop: '5s',
+  noConnectionReuse: true,
+  dns: {
+    ttl: __ENV.DNS_TTL || '30s',
+    select: 'random',
+    policy: 'preferIPv4',
+  },
   thresholds: {
     hls_playlist_failures: ['count>=0'],
     hls_segment_failures: ['count>=0'],
@@ -46,6 +52,16 @@ function firstMediaLine(body, suffix) {
     }
   }
   return '';
+}
+
+function latestSegmentLine(body) {
+  const lines = String(body || '').split(/\r?\n/);
+  let selected = '';
+  for (const line of lines) {
+    const value = line.trim();
+    if (/_seg[0-9]+\.mp4(?:\?.*)?$/.test(value)) selected = value;
+  }
+  return selected;
 }
 
 function resolveRelative(parentURL, child) {
@@ -90,7 +106,7 @@ export default function () {
     return;
   }
 
-  const segmentName = firstMediaLine(playlist.body, '.mp4');
+  const segmentName = latestSegmentLine(playlist.body);
   if (!segmentName) {
     playlistFailures.add(1, { playlist: 'segment_parse' });
     sessionFailures.add(true);
