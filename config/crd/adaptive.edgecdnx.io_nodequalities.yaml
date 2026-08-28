@@ -49,6 +49,10 @@ spec:
                 state: {type: string, enum: [Unknown, Healthy, Degraded, Ejected, Recovering, Stale, Disabled]}
                 stateSince: {type: string, format: date-time, nullable: true}
                 ejectionCount: {type: integer, format: int32, minimum: 0}
+                consecutiveFailures: {type: integer, format: int32, minimum: 0}
+                consecutiveHealthy: {type: integer, format: int32, minimum: 0}
+                recoveryStep: {type: integer, format: int32, minimum: 0, maximum: 3}
+                lastFailureType: {type: string, enum: ['', origin_5xx, connect_timeout, request_timeout, client_cancel, probe_failure, metrics_stale]}
                 ejectedUntil: {type: string, format: date-time, nullable: true}
                 reason: {type: string}
                 conditions:

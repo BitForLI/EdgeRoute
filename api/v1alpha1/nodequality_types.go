@@ -13,21 +13,25 @@ type NodeQualitySpec struct {
 }
 
 type NodeQualityStatus struct {
-	ObservedAt        *metav1.Time       `json:"observedAt,omitempty"`
-	SampleCount       int64              `json:"sampleCount,omitempty"`
-	LatencyEWMAMillis float64            `json:"latencyEWMAMillis,omitempty"`
-	ErrorEWMA         float64            `json:"errorEWMA,omitempty"`
-	CacheHitRatio     float64            `json:"cacheHitRatio,omitempty"`
-	ActiveRequests    int32              `json:"activeRequests,omitempty"`
-	ConcurrencyLimit  int32              `json:"concurrencyLimit,omitempty"`
-	QualityScore      float64            `json:"qualityScore,omitempty"`
-	EffectiveWeight   int32              `json:"effectiveWeight,omitempty"`
-	State             string             `json:"state,omitempty"`
-	StateSince        *metav1.Time       `json:"stateSince,omitempty"`
-	EjectionCount     int32              `json:"ejectionCount,omitempty"`
-	EjectedUntil      *metav1.Time       `json:"ejectedUntil,omitempty"`
-	Reason            string             `json:"reason,omitempty"`
-	Conditions        []metav1.Condition `json:"conditions,omitempty"`
+	ObservedAt          *metav1.Time       `json:"observedAt,omitempty"`
+	SampleCount         int64              `json:"sampleCount,omitempty"`
+	LatencyEWMAMillis   float64            `json:"latencyEWMAMillis,omitempty"`
+	ErrorEWMA           float64            `json:"errorEWMA,omitempty"`
+	CacheHitRatio       float64            `json:"cacheHitRatio,omitempty"`
+	ActiveRequests      int32              `json:"activeRequests,omitempty"`
+	ConcurrencyLimit    int32              `json:"concurrencyLimit,omitempty"`
+	QualityScore        float64            `json:"qualityScore,omitempty"`
+	EffectiveWeight     int32              `json:"effectiveWeight,omitempty"`
+	State               string             `json:"state,omitempty"`
+	StateSince          *metav1.Time       `json:"stateSince,omitempty"`
+	EjectionCount       int32              `json:"ejectionCount,omitempty"`
+	ConsecutiveFailures int32              `json:"consecutiveFailures,omitempty"`
+	ConsecutiveHealthy  int32              `json:"consecutiveHealthy,omitempty"`
+	RecoveryStep        int32              `json:"recoveryStep,omitempty"`
+	LastFailureType     string             `json:"lastFailureType,omitempty"`
+	EjectedUntil        *metav1.Time       `json:"ejectedUntil,omitempty"`
+	Reason              string             `json:"reason,omitempty"`
+	Conditions          []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

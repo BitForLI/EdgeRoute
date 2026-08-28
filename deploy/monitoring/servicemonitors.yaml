@@ -20,6 +20,9 @@ spec:
     - port: toxiproxy-api
       path: /metrics
       interval: 5s
+    - port: log-metrics
+      path: /metrics
+      interval: 5s
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor

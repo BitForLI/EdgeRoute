@@ -13,6 +13,34 @@ It supports:
 - Parent location fallback, followed by configured fallback locations, when a primary location has no healthy node
 - Authoritative zone responses for configured Zone CRDs (SOA/NS and related behavior)
 
+## Adaptive Quality Controller (EdgeRoute extension)
+
+This fork adds an out-of-request-path controller that converts configurable Prometheus queries into `NodeQuality` status. It uses EWMA smoothing, bounded multiplicative weights, per-location ejection safety, last-known-good stale handling, and progressive recovery. The controller reads existing EdgeCDN-X `Location` objects to check local capacity and configured fallback availability; CoreDNS integration is intentionally delivered separately in Day 5.
+
+The following values are **lab defaults for the reproducible kind experiment, not production recommendations**:
+
+| Flag | Lab default |
+| --- | --- |
+| `--prometheus-url` | `http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090` |
+| `--prometheus-timeout` | `3s` |
+| `--leader-elect` | `true` (`Lease` in `edge-system`) |
+| `--reconcile-interval` | `5s` |
+| `--metric-stale-after` | `30s` |
+| `--hard-stale-after` | `5m` |
+| `--latency-ewma-alpha` | `0.2` |
+| `--error-ewma-alpha` | `0.3` |
+| `--consecutive-error-threshold` | `5` |
+| `--error-rate-threshold` | `0.10` with at least 50 requests |
+| `--base-ejection-time` / `--max-ejection-time` | `30s` / `5m` |
+| `--max-ejection-percent` | `50` per Location |
+| `--recovery-steps` | `30s,60s,120s` (10%, 25%, 50%, then 100%) |
+| `--minimum-sample-count` | `50` |
+| `--latency-degraded-factor` | `12.0` times the 30-minute P10 baseline (covers normal P95/P10 spread in the lab exporter buckets) |
+| `--healthy-samples-to-recover` | `3` |
+| `--minimum-weight-delta` | `5` |
+
+All seven metric expressions are configurable with `--query-*` flags and must contain the literal `$NODE` placeholder. The committed defaults target the mature NGINX log exporter and official NGINX Prometheus exporter deployed by this repository; no metric name is embedded in the state engine.
+
 ## How It Works
 
 For each DNS query:

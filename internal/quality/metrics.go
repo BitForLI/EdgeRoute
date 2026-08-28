@@ -10,10 +10,13 @@ type NodeSample struct {
 	RequestCount         uint64
 	ErrorCount           uint64
 	P95Latency           time.Duration
+	BaselineLatency      time.Duration
 	CacheHitRatio        float64
 	ActiveRequests       int
 	CPUUtilisation       float64
 	BandwidthUtilisation float64
+	ProbeFailed          bool
+	FailureKind          string
 }
 
 type MetricsProvider interface {

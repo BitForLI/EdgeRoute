@@ -12,6 +12,15 @@ rules:
   - apiGroups: [adaptive.edgecdnx.io]
     resources: [nodequalities/status]
     verbs: [get, patch, update]
+  - apiGroups: [infrastructure.edgecdnx.com]
+    resources: [locations]
+    verbs: [get, list, watch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, update, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -35,7 +44,7 @@ spec:
       serviceAccountName: quality-controller
       containers:
         - name: controller
-          image: edgeroute-quality-controller:dev
+          image: edgeroute-quality-controller:day4
           imagePullPolicy: IfNotPresent
           args: [--reconcile-interval=5s]
           ports: [{name: metrics, containerPort: 8080}, {name: health, containerPort: 8081}]

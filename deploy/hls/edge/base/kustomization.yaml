@@ -9,5 +9,6 @@ configMapGenerator:
     files:
       - nginx.conf
       - toxiproxy.json
+      - exporter.hcl
 generatorOptions:
   disableNameSuffixHash: true
