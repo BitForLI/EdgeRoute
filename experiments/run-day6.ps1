@@ -197,7 +197,12 @@ function Invoke-Run {
         if ($k6ExitCode -ne '0') { throw "k6 returned exit code $k6ExitCode for $runID; raw output was retained." }
         Save-NodeQualitySnapshot -RunDirectory $runDirectory -Stage 'run-complete'
         Save-ServiceMetrics -RunDirectory $runDirectory
-        Save-Text -Path (Join-Path $runDirectory 'toxiproxy-config.json') -Value (Get-ToxiproxyState -Node 'edge-syd-a')
+        try {
+            $toxiproxyState = Get-ToxiproxyState -Node 'edge-syd-a'
+        } catch {
+            $toxiproxyState = (@{unavailable = $true; reason = $_.Exception.Message} | ConvertTo-Json -Compress)
+        }
+        Save-Text -Path (Join-Path $runDirectory 'toxiproxy-config.json') -Value $toxiproxyState
     } finally {
         & (Join-Path $scenarioRoot 'recover.ps1')
         & (Join-Path $scenarioRoot 'verify.ps1') -Expected Recovered
