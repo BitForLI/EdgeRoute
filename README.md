@@ -9,7 +9,7 @@ It supports:
 - Direct node resolution for hostnames in the form `node.location.node.service`
 - Prefix-list routing (IP/CIDR to location)
 - Geo metadata lookup fallback when no prefix match is found
-- Hash-based node selection with health-aware filtering, spanning child locations
+- Weighted Rendezvous node selection driven by immutable NodeQuality snapshots, with health-aware filtering across child locations
 - Parent location fallback, followed by configured fallback locations, when a primary location has no healthy node
 - Authoritative zone responses for configured Zone CRDs (SOA/NS and related behavior)
 
@@ -89,6 +89,7 @@ This plugin watches EdgeCDN-X CRDs via Kubernetes dynamic informers:
 - `locations`
 - `prefixlists`
 - `zones`
+- `nodequalities.adaptive.edgecdnx.io` (optional; static fail-open when the CRD is absent)
 
 A working Kubernetes client configuration is required (`controller-runtime` `GetConfigOrDie()`), typically from in-cluster config or kubeconfig in the environment.
 
@@ -103,6 +104,7 @@ edgecdnx [ZONES...] {
   ns <ns-hostname> <ipv4>
   ns <ns-hostname> <ipv4>
   recordttl <seconds>
+  defaultweight <1-100>
   dnsresponsetype <CNAME|A_AAAA>
   grpcresponsetype <CNAME|A_AAAA>
 }
@@ -116,6 +118,7 @@ Directives:
 | `soa` | Yes | none | SOA MNAME label prefix used when crafting SOA records (`<soa>.<zone>`). |
 | `ns` | Recommended (repeatable) | empty | Adds NS and NS A records for each served zone. Format: `ns <hostname> <ipv4>`. |
 | `recordttl` | No | `60` | TTL (seconds) used for generated `A`/`AAAA` node answers. |
+| `defaultweight` | No | `100` | Static weight used when a node has no NodeQuality entry or the CRD is absent. |
 | `dnsresponsetype` | No | `A_AAAA` | Allowed values: `CNAME`, `A_AAAA`. Used for normal DNS-originated dynamic responses. |
 | `grpcresponsetype` | No | `CNAME` | Allowed values: `CNAME`, `A_AAAA`. Parsed and stored in plugin state. |
 
@@ -141,6 +144,7 @@ Example:
     ns ns1.edge.example.com. 203.0.113.10
     ns ns2.edge.example.com. 203.0.113.11
     recordttl 60
+    defaultweight 100
     dnsresponsetype A_AAAA
     grpcresponsetype CNAME
   }
@@ -194,7 +198,8 @@ Runtime details:
 
 ## Readiness and Operational Notes
 
-- Plugin readiness is tied to informer sync for Zone, Service, and PrefixList watchers.
+- Plugin readiness is tied to informer sync for Zone, Service, Location, PrefixList, and enabled NodeQuality watchers.
+- If the NodeQuality CRD is absent, startup logs a warning and static EdgeCDN-X routing remains available.
 - If informers have not synced yet, CoreDNS `ready` integration will report not ready for this plugin.
 - Logging uses CoreDNS plugin logger under `edgecdnx*` prefixes.
 
@@ -207,10 +212,15 @@ Runtime details:
 
 ## Metrics
 
-A Prometheus counter vector is defined:
+Prometheus metrics include:
 - `coredns_edgecdnx_request_count_total{server="..."}`
+- `coredns_edgeroute_routing_total{location,node,result}`
+- `coredns_edgeroute_fallback_total{from,to,reason}`
+- `coredns_edgeroute_node_unavailable_total{node,reason}`
+- `coredns_edgeroute_selection_duration_seconds`
+- `coredns_edgeroute_snapshot_age_seconds`
 
-At present, the counter is declared but not incremented in request handling code.
+The request counter is incremented once at the start of every plugin request. Labels use finite configured server, location and node sets; client IPs and request IDs are not metric labels.
 
 ## Troubleshooting
 
