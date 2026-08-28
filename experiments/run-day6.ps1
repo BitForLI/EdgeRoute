@@ -163,6 +163,11 @@ function Invoke-Run {
     $scenarioRoot = Join-Path $PSScriptRoot "scenarios\$Scenario"
     $startedAt = (Get-Date).ToUniversalTime()
 
+    Reset-NodeQualityBaseline
+    if ($Variant -eq 'adaptive') {
+        Invoke-Day6Kubectl -Arguments @('scale', 'deployment/quality-controller', '-n', $namespace, '--replicas=1') | Out-Null
+        Invoke-Day6Kubectl -Arguments @('rollout', 'status', 'deployment/quality-controller', '-n', $namespace, '--timeout=120s') | Out-Null
+    }
     & (Join-Path $scenarioRoot 'setup.ps1')
     New-RunConfig -RunID $runID -Variant $Variant -Scenario $Scenario
     Invoke-Day6Kubectl -Arguments @('delete', 'job/edgeroute-k6', '-n', $namespace, '--ignore-not-found=true', '--wait=true') | Out-Null
