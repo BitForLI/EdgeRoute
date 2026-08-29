@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Namespace = 'edge-data',
+    [string]$Context = 'kind-edgeroute',
     [string[]]$Edges = @('edge-syd-a', 'edge-syd-b', 'edge-sin-a')
 )
 
@@ -11,7 +12,7 @@ function Invoke-KubectlExec {
         [string]$Deployment,
         [string[]]$Command
     )
-    $output = & kubectl exec -n $Namespace $Deployment -c nginx -- @Command 2>&1
+    $output = & kubectl --context $Context exec -n $Namespace $Deployment -c nginx -- @Command 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "kubectl exec failed for ${Deployment}:`n$($output -join "`n")"
     }

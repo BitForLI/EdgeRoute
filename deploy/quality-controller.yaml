@@ -44,7 +44,7 @@ spec:
       serviceAccountName: quality-controller
       containers:
         - name: controller
-          image: edgeroute-quality-controller:day4
+          image: edgeroute-quality-controller:dev
           imagePullPolicy: IfNotPresent
           args: [--reconcile-interval=5s]
           ports: [{name: metrics, containerPort: 8080}, {name: health, containerPort: 8081}]

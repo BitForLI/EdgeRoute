@@ -122,3 +122,41 @@ func TestSnapshotIsImmutableAndConcurrent(t *testing.T) {
 	}
 	wait.Wait()
 }
+
+func FuzzBuildRoutingKeyStable(f *testing.F) {
+	f.Add([]byte{192, 0, 2, 10}, "VIDEO.Example", uint16(1))
+	f.Add([]byte(net.ParseIP("2001:db8::1")), "v.example.", uint16(28))
+	f.Fuzz(func(t *testing.T, rawIP []byte, qname string, queryType uint16) {
+		ip := net.IP(rawIP)
+		first := BuildRoutingKey(ip, qname, queryType)
+		second := BuildRoutingKey(ip, qname, queryType)
+		if first != second {
+			t.Fatalf("routing key changed for the same input: %q != %q", first, second)
+		}
+	})
+}
+
+func FuzzWeightedRendezvousNeverSelectsInvalidCandidate(f *testing.F) {
+	f.Add("client|video.example.|1", "healthy", float64(100))
+	f.Fuzz(func(t *testing.T, key, validID string, rawWeight float64) {
+		if validID == "" {
+			validID = "healthy"
+		}
+		weight := math.Abs(rawWeight)
+		if weight == 0 || math.IsNaN(weight) || math.IsInf(weight, 0) {
+			weight = 1
+		}
+		candidates := []Candidate{
+			{ID: "", Weight: 100},
+			{ID: "zero", Weight: 0},
+			{ID: "negative", Weight: -1},
+			{ID: "nan", Weight: math.NaN()},
+			{ID: "infinite", Weight: math.Inf(1)},
+			{ID: validID, Weight: weight},
+		}
+		got, ok := SelectWeightedRendezvous(key, candidates)
+		if !ok || got != validID {
+			t.Fatalf("selected %q, want the only valid candidate %q", got, validID)
+		}
+	})
+}

@@ -6,9 +6,10 @@ param(
     [ValidateRange(1, 20)][int]$Repetitions = 3,
     [ValidateRange(1, 120)][int]$InjectionDelaySeconds = 4,
     [string]$Context = 'kind-edgeroute',
-    [string]$SourceImage = 'edgeroute-coredns:day6',
+    [string]$SourceImage = 'edgeroute-coredns:dev',
     [string]$K6Image = 'grafana/k6:1.8.0',
-    [string]$K6RuntimeImage = 'edgeroute-k6:1.8.0'
+    [string]$K6RuntimeImage = 'edgeroute-k6:1.8.0',
+    [string]$OutputRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,7 +17,15 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'lib\Day6.Common.ps1')
 
 $namespace = 'edge-system'
-$rawRoot = Join-Path $PSScriptRoot 'results\raw'
+$rawRoot = if ($OutputRoot) {
+    if ([System.IO.Path]::IsPathRooted($OutputRoot)) {
+        [System.IO.Path]::GetFullPath($OutputRoot)
+    } else {
+        [System.IO.Path]::GetFullPath((Join-Path $repoRoot $OutputRoot))
+    }
+} else {
+    Join-Path $PSScriptRoot 'results\raw'
+}
 $shortCommit = (& git -C $repoRoot rev-parse --short HEAD).Trim()
 $fullCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 if (-not $shortCommit -or $LASTEXITCODE -ne 0) { throw 'Unable to resolve the EdgeRoute Git commit.' }
@@ -122,6 +131,25 @@ function Initialize-K6Resources {
     Invoke-Day6Kubectl -Arguments @('apply', '-f', (Join-Path $PSScriptRoot 'k6\prefixlist.yaml')) | Out-Null
 }
 
+function Install-K6Job {
+    $dnsServiceIP = ((Invoke-Day6Kubectl -Arguments @(
+        'get', 'service/edgeroute-coredns', '-n', $namespace,
+        '-o', 'jsonpath={.spec.clusterIP}'
+    )) -join '').Trim()
+    $parsedAddress = $null
+    if (-not [System.Net.IPAddress]::TryParse($dnsServiceIP, [ref]$parsedAddress)) {
+        throw "EdgeRoute DNS Service returned invalid ClusterIP '$dnsServiceIP'."
+    }
+
+    $jobTemplate = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'k6\job.yaml')
+    if (-not $jobTemplate.Contains('__EDGEROUTE_DNS_SERVICE_IP__')) {
+        throw 'k6 Job template does not contain the DNS Service IP placeholder.'
+    }
+    $renderedJob = $jobTemplate.Replace('__EDGEROUTE_DNS_SERVICE_IP__', $dnsServiceIP)
+    $renderedJob | & kubectl --context $Context apply -f - | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to apply the rendered k6 Job.' }
+}
+
 function New-RunConfig {
     param([string]$RunID, [string]$Variant, [string]$Scenario)
     Invoke-Day6Kubectl -Arguments @('delete', 'configmap/edgeroute-k6-run', '-n', $namespace, '--ignore-not-found=true') | Out-Null
@@ -175,7 +203,7 @@ function Invoke-Run {
     & (Join-Path $scenarioRoot 'setup.ps1')
     New-RunConfig -RunID $runID -Variant $Variant -Scenario $Scenario
     Invoke-Day6Kubectl -Arguments @('delete', 'job/edgeroute-k6', '-n', $namespace, '--ignore-not-found=true', '--wait=true') | Out-Null
-    Invoke-Day6Kubectl -Arguments @('apply', '-f', (Join-Path $PSScriptRoot 'k6\job.yaml')) | Out-Null
+    Install-K6Job
     $jobUID = ((Invoke-Day6Kubectl -Arguments @('get', 'job/edgeroute-k6', '-n', $namespace, '-o', 'jsonpath={.metadata.uid}')) -join '').Trim()
     if (-not $jobUID) { throw "Unable to resolve the k6 Job UID for $runID." }
     $podSelector = "batch.kubernetes.io/controller-uid=$jobUID"

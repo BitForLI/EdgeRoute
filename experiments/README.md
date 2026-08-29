@@ -8,7 +8,7 @@ This directory implements the manual's k6 HLS and fault-injection stage. It reus
 - `static-rendezvous`: equal-weight Weighted Rendezvous with the same active-health filtering and fallback, while the NodeQuality Controller is disabled. This isolates hash-family effects from quality-aware control.
 - `adaptive`: EWMA/outlier state, NodeQuality effective weights, Weighted Rendezvous, ejection, and recovery ramp.
 
-Both variants use the same compiled image. The explicit `routingmode` Corefile setting is the only DNS selection change, which avoids mixing binary or dependency changes into the comparison. The runner creates immutable tags `edgeroute-coredns:baseline-<git-sha>` and `edgeroute-coredns:adaptive-<git-sha>` and records their image IDs.
+All three variants use the same compiled image. The explicit `routingmode` Corefile setting and controller replica count are the only control changes, which avoids mixing binary or dependency changes into the comparison. The runner creates immutable per-variant tags and records their image IDs.
 
 ## Profiles
 
@@ -18,7 +18,7 @@ The `full` profile follows the manual: one-minute warm-up, three minutes at 20 V
 
 ## Run
 
-Prerequisites are the Day 5 kind testbed, `edgeroute-coredns:day6`, Docker, kubectl, and PowerShell 7.
+Prerequisites are the Day 5 kind testbed, `edgeroute-coredns:dev`, Docker, kubectl, and PowerShell 7. The runner discovers the current `edgeroute-coredns` Service ClusterIP; no cluster-specific DNS address is stored in the Job template.
 
 ```powershell
 ./experiments/run-day6.ps1 -Profile smoke -Repetitions 3
@@ -33,7 +33,7 @@ python -m pip install -r experiments/requirements.txt
 python experiments/process_results.py
 ```
 
-This produces `runs.csv`, aggregated `summary.csv`, a Markdown table, and `baseline-vs-adaptive.png` under `experiments/results/processed/`. Re-running the processor replaces only derived artifacts; it never edits raw run data.
+This produces `runs.csv`, aggregated `summary.csv`, a Markdown table, and `policy-comparison.png` under `experiments/results/processed/`. Re-running the processor replaces only derived artifacts; it never edits raw run data.
 
 By default, the processor requires the complete 3 variants x 4 scenarios x 3 repetitions matrix. It also requires one shared profile, Git commit, CoreDNS image ID, and host; all nine evidence files; a successful k6 execution identity; non-empty Prometheus response/cache telemetry; and matching directory, metadata, and k6 detail run IDs. `--allow-incomplete` is only for runner development and must not be used for published evidence.
 

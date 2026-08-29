@@ -81,7 +81,7 @@ spec:
       serviceAccountName: edgeroute-coredns
       containers:
         - name: coredns
-          image: edgeroute-coredns:day5
+          image: edgeroute-coredns:dev
           imagePullPolicy: Never
           args: [-conf, /etc/coredns/Corefile]
           ports:
