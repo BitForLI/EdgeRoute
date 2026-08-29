@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('smoke', 'full')][string]$Profile = 'smoke',
-    [ValidateSet('baseline', 'adaptive')][string[]]$Variants = @('baseline', 'adaptive'),
+    [ValidateSet('baseline', 'static-rendezvous', 'adaptive')][string[]]$Variants = @('baseline', 'static-rendezvous', 'adaptive'),
     [ValidateSet('latency', 'disconnect', 'pod-down', 'cold-cache')][string[]]$Scenarios = @('latency', 'disconnect', 'pod-down', 'cold-cache'),
     [ValidateRange(1, 20)][int]$Repetitions = 3,
     [ValidateRange(1, 120)][int]$InjectionDelaySeconds = 4,
@@ -67,8 +67,12 @@ function Reset-NodeQualityBaseline {
 }
 
 function Set-Variant {
-    param([Parameter(Mandatory)][ValidateSet('baseline', 'adaptive')][string]$Variant)
-    $routingMode = if ($Variant -eq 'baseline') { 'deterministic' } else { 'adaptive' }
+    param([Parameter(Mandatory)][ValidateSet('baseline', 'static-rendezvous', 'adaptive')][string]$Variant)
+    $routingMode = switch ($Variant) {
+        'baseline' { 'deterministic' }
+        'static-rendezvous' { 'static-rendezvous' }
+        default { 'adaptive' }
+    }
     $tag = "edgeroute-coredns:$Variant-$shortCommit"
     & docker image inspect $SourceImage *> $null
     if ($LASTEXITCODE -ne 0) { throw "Required source image '$SourceImage' was not found." }
@@ -78,8 +82,8 @@ function Set-Variant {
     if ($LASTEXITCODE -ne 0) { throw "Unable to load $tag into kind." }
 
     $corefile = (Invoke-Day6Kubectl -Arguments @('get', 'configmap/edgeroute-coredns', '-n', $namespace, '-o', 'jsonpath={.data.Corefile}')) -join "`n"
-    if ($corefile -match 'routingmode\s+(adaptive|deterministic)') {
-        $corefile = [regex]::Replace($corefile, 'routingmode\s+(adaptive|deterministic)', "routingmode $routingMode")
+    if ($corefile -match 'routingmode\s+(adaptive|static-rendezvous|deterministic)') {
+        $corefile = [regex]::Replace($corefile, 'routingmode\s+(adaptive|static-rendezvous|deterministic)', "routingmode $routingMode")
     } elseif ($corefile -match '(?m)^(\s*defaultweight\s+\d+\s*)$') {
         $corefile = [regex]::Replace($corefile, '(?m)^(\s*defaultweight\s+\d+\s*)$', "`$1`n        routingmode $routingMode")
     } else {
@@ -237,7 +241,11 @@ function Invoke-Run {
         end_timestamp = $finishedAt.ToString('o')
         container_tags = @{coredns = $ImageTag; coredns_id = $imageID; k6_upstream = $K6Image; k6_runtime = $K6RuntimeImage}
         cluster_config = 'deploy/kind/cluster.yaml; 3 kind nodes; logical Sydney/Singapore regions'
-        algorithm_config = if ($Variant -eq 'baseline') { 'deterministic upstream modulo hash + active health + fallback' } else { 'EWMA + ejection + weighted rendezvous + recovery ramp' }
+        algorithm_config = switch ($Variant) {
+            'baseline' { 'deterministic upstream modulo hash + active health + fallback' }
+            'static-rendezvous' { 'equal-weight rendezvous + active health + fallback; NodeQuality controller disabled' }
+            default { 'EWMA + ejection + weighted rendezvous + recovery ramp' }
+        }
         injection_delay_seconds = $InjectionDelaySeconds
         host_hardware = (Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name).Trim()
     }

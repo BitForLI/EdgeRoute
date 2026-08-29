@@ -5,6 +5,7 @@ This directory implements the manual's k6 HLS and fault-injection stage. It reus
 ## Compared variants
 
 - `baseline`: upstream EdgeCDN-X deterministic modulo hash with active-health filtering and geographic fallback.
+- `static-rendezvous`: equal-weight Weighted Rendezvous with the same active-health filtering and fallback, while the NodeQuality Controller is disabled. This isolates hash-family effects from quality-aware control.
 - `adaptive`: EWMA/outlier state, NodeQuality effective weights, Weighted Rendezvous, ejection, and recovery ramp.
 
 Both variants use the same compiled image. The explicit `routingmode` Corefile setting is the only DNS selection change, which avoids mixing binary or dependency changes into the comparison. The runner creates immutable tags `edgeroute-coredns:baseline-<git-sha>` and `edgeroute-coredns:adaptive-<git-sha>` and records their image IDs.
@@ -34,7 +35,7 @@ python experiments/process_results.py
 
 This produces `runs.csv`, aggregated `summary.csv`, a Markdown table, and `baseline-vs-adaptive.png` under `experiments/results/processed/`. Re-running the processor replaces only derived artifacts; it never edits raw run data.
 
-By default, the processor requires the complete 2 variants x 4 scenarios x 3 repetitions matrix. It also requires one shared profile, Git commit, CoreDNS image ID, and host; all nine evidence files; a successful k6 execution identity; non-empty Prometheus response/cache telemetry; and matching directory, metadata, and k6 detail run IDs. `--allow-incomplete` is only for runner development and must not be used for published evidence.
+By default, the processor requires the complete 3 variants x 4 scenarios x 3 repetitions matrix. It also requires one shared profile, Git commit, CoreDNS image ID, and host; all nine evidence files; a successful k6 execution identity; non-empty Prometheus response/cache telemetry; and matching directory, metadata, and k6 detail run IDs. `--allow-incomplete` is only for runner development and must not be used for published evidence.
 
 ## Scenario contract
 

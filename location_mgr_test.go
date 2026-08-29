@@ -159,6 +159,34 @@ func TestLocationManagerDeterministicBaselineKeepsActiveHealthFilter(t *testing.
 	}
 }
 
+func TestLocationManagerStaticRendezvousIgnoresNodeQuality(t *testing.T) {
+	location := testLocation("sydney",
+		testNode("edge-a", "192.0.2.10", "2001:db8::10"),
+		testNode("edge-b", "192.0.2.20", "2001:db8::20"),
+	)
+	manager := testLocationManager(100, []routing.NodeQuality{
+		{Location: "sydney", Node: "edge-a", EffectiveWeight: 0, State: "Ejected"},
+		{Location: "sydney", Node: "edge-b", EffectiveWeight: 100, State: "Healthy"},
+	})
+	manager.Config.RoutingMode = RoutingModeStaticRendezvous
+
+	counts := map[string]int{}
+	const samples = 20_000
+	for i := 0; i < samples; i++ {
+		selected, err := manager.ApplyHash(&location, fmt.Sprintf("static-%d", i), HashFilters{Cache: "hls", Qtype: dns.TypeA})
+		if err != nil {
+			t.Fatalf("static rendezvous selection: %v", err)
+		}
+		counts[selected.Node.Name]++
+	}
+	for _, node := range []string{"edge-a", "edge-b"} {
+		share := float64(counts[node]) / samples
+		if share < 0.47 || share > 0.53 {
+			t.Fatalf("%s static share %.4f outside [0.47, 0.53]: %#v", node, share, counts)
+		}
+	}
+}
+
 func testLocationManager(staticWeight int32, entries []routing.NodeQuality) *LocationManager {
 	manager := testLocationManagerWithoutQuality(staticWeight)
 	quality := testNodeQualityManager(time.Now())

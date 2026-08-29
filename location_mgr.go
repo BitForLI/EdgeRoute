@@ -31,8 +31,9 @@ type LocationManagerConfiguration struct {
 }
 
 const (
-	RoutingModeAdaptive      = "adaptive"
-	RoutingModeDeterministic = "deterministic"
+	RoutingModeAdaptive         = "adaptive"
+	RoutingModeDeterministic    = "deterministic"
+	RoutingModeStaticRendezvous = "static-rendezvous"
 )
 
 type LocationManager struct {
@@ -185,7 +186,7 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 	}
 
 	snapshot := routing.EmptySnapshot()
-	if l.Quality != nil {
+	if l.Config.RoutingMode == RoutingModeAdaptive && l.Quality != nil {
 		snapshot = l.Quality.Snapshot()
 		if !snapshot.UpdatedAt.IsZero() {
 			age := time.Since(snapshot.UpdatedAt).Seconds()
@@ -211,15 +212,17 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 			continue
 		}
 		weight := l.Config.StaticDefaultWeight
-		if quality, found := snapshot.Lookup(node.LocationName, node.Node.Name); found {
-			if quality.State == "Disabled" || quality.State == "Ejected" {
-				nodeUnavailableTotal.WithLabelValues(node.Node.Name, quality.State).Inc()
-				continue
-			}
-			weight = quality.EffectiveWeight
-			if weight <= 0 {
-				nodeUnavailableTotal.WithLabelValues(node.Node.Name, "zero_weight").Inc()
-				continue
+		if l.Config.RoutingMode == RoutingModeAdaptive {
+			if quality, found := snapshot.Lookup(node.LocationName, node.Node.Name); found {
+				if quality.State == "Disabled" || quality.State == "Ejected" {
+					nodeUnavailableTotal.WithLabelValues(node.Node.Name, quality.State).Inc()
+					continue
+				}
+				weight = quality.EffectiveWeight
+				if weight <= 0 {
+					nodeUnavailableTotal.WithLabelValues(node.Node.Name, "zero_weight").Inc()
+					continue
+				}
 			}
 		}
 		id := node.LocationName + "\x00" + node.Node.Name
@@ -232,7 +235,11 @@ func (l LocationManager) ApplyHash(location *infrastructurev1alpha1.Location, ha
 		return FilteredNodeWithMeta{}, fmt.Errorf("no healthy weighted nodes found in location %s with cache %s", location.Name, filters.Cache)
 	}
 	selected := eligible[selectedID]
-	routingTotal.WithLabelValues(selected.LocationName, selected.Node.Name, "selected").Inc()
+	result := "selected"
+	if l.Config.RoutingMode == RoutingModeStaticRendezvous {
+		result = "static_selected"
+	}
+	routingTotal.WithLabelValues(selected.LocationName, selected.Node.Name, result).Inc()
 	return selected, nil
 }
 

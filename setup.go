@@ -105,8 +105,8 @@ func setup(c *caddy.Controller) error {
 			staticDefaultWeight = int32(raw)
 		}
 		if val == "routingmode" {
-			if len(args) != 1 || (args[0] != RoutingModeAdaptive && args[0] != RoutingModeDeterministic) {
-				return plugin.Error("edgecdnx", fmt.Errorf("routingmode must be one of: %s, %s", RoutingModeAdaptive, RoutingModeDeterministic))
+			if len(args) != 1 || (args[0] != RoutingModeAdaptive && args[0] != RoutingModeDeterministic && args[0] != RoutingModeStaticRendezvous) {
+				return plugin.Error("edgecdnx", fmt.Errorf("routingmode must be one of: %s, %s, %s", RoutingModeAdaptive, RoutingModeDeterministic, RoutingModeStaticRendezvous))
 			}
 			routingMode = args[0]
 		}

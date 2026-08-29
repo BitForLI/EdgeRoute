@@ -16,7 +16,7 @@ os.environ.setdefault("MPLCONFIGDIR", str(Path(__file__).resolve().parents[1] / 
 
 import matplotlib.pyplot as plt
 
-EXPECTED_VARIANTS = ("baseline", "adaptive")
+EXPECTED_VARIANTS = ("baseline", "static-rendezvous", "adaptive")
 EXPECTED_SCENARIOS = ("latency", "disconnect", "pod-down", "cold-cache")
 REQUIRED_METRICS = (
     "hls_playlist_requests",
@@ -209,11 +209,11 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 
 def plot_summary(path: Path, rows: list[dict]) -> None:
     scenarios = sorted({str(row["scenario"]) for row in rows})
-    variants = [variant for variant in ("baseline", "adaptive") if any(row["variant"] == variant for row in rows)]
+    variants = [variant for variant in EXPECTED_VARIANTS if any(row["variant"] == variant for row in rows)]
     lookup = {(row["scenario"], row["variant"]): row for row in rows}
     x = list(range(len(scenarios)))
-    width = 0.36 if len(variants) == 2 else 0.6
-    colors = {"baseline": "#6b7280", "adaptive": "#0f766e"}
+    width = 0.24 if len(variants) == 3 else (0.36 if len(variants) == 2 else 0.6)
+    colors = {"baseline": "#6b7280", "static-rendezvous": "#2563eb", "adaptive": "#0f766e"}
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), constrained_layout=True)
     for index, variant in enumerate(variants):
         offset = (index - (len(variants) - 1) / 2) * width
@@ -234,7 +234,7 @@ def plot_summary(path: Path, rows: list[dict]) -> None:
     repetitions = sorted({int(row["runs"]) for row in rows})
     sample_note = f"n={repetitions[0]} per variant/scenario" if len(repetitions) == 1 else "uneven repetition counts"
     fig.suptitle(
-        f"EdgeRoute Day 6: deterministic baseline vs adaptive routing\nmean ± sample standard deviation; {sample_note}",
+        f"EdgeRoute Day 6: deterministic, static rendezvous, and adaptive routing\nmean ± sample standard deviation; {sample_note}",
         fontsize=12,
     )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -279,34 +279,35 @@ def write_report(path: Path, rows: list[dict], evidence: dict[str, str], run_cou
     lines.extend(
         [
             "",
-            "## Adaptive effect versus baseline",
+            "## Policy effect versus deterministic baseline",
             "",
             "Negative values are improvements for both failure-rate delta and latency change.",
             "",
-            "| Scenario | Session failure delta | Segment P95 change |",
-            "|---|---:|---:|",
+            "| Scenario | Variant | Session failure delta | Segment P95 change |",
+            "|---|---|---:|---:|",
         ]
     )
     for scenario in EXPECTED_SCENARIOS:
         baseline = lookup.get((scenario, "baseline"))
-        adaptive = lookup.get((scenario, "adaptive"))
-        if not baseline or not adaptive:
-            continue
-        failure_delta = 100 * (
-            float(adaptive["session_failure_rate_mean"]) - float(baseline["session_failure_rate_mean"])
-        )
-        baseline_latency = float(baseline["segment_p95_ms_mean"])
-        latency_change = 100 * (float(adaptive["segment_p95_ms_mean"]) / baseline_latency - 1)
-        lines.append(f"| {scenario} | {failure_delta:+.2f} pp | {latency_change:+.2f}% |")
+        for variant in ("static-rendezvous", "adaptive"):
+            treatment = lookup.get((scenario, variant))
+            if not baseline or not treatment:
+                continue
+            failure_delta = 100 * (
+                float(treatment["session_failure_rate_mean"]) - float(baseline["session_failure_rate_mean"])
+            )
+            baseline_latency = float(baseline["segment_p95_ms_mean"])
+            latency_change = 100 * (float(treatment["segment_p95_ms_mean"]) / baseline_latency - 1)
+            lines.append(f"| {scenario} | {variant} | {failure_delta:+.2f} pp | {latency_change:+.2f}% |")
     lines.extend(
         [
             "",
-            "![Baseline versus adaptive comparison](baseline-vs-adaptive.png)",
+            "![Three-policy comparison](policy-comparison.png)",
             "",
             "## Interpretation limits",
             "",
             profile_limit,
-            "- This comparison has two variants. The baseline combines deterministic modulo hashing, active-health filtering, and fallback; it does not isolate the manual's raw modulo-only baseline as a third policy.",
+            "- The static-rendezvous control isolates the hash-family change: it keeps active-health filtering and fallback, assigns equal weights, and does not consume NodeQuality.",
             "- Three repetitions expose run-to-run spread but are insufficient for production SLO or global-scale claims.",
             "- The kind cluster uses logical Sydney/Singapore regions on one workstation, not real cross-region links.",
             "",
@@ -327,7 +328,7 @@ def main() -> None:
     rows = aggregate(runs)
     write_csv(args.processed / "runs.csv", runs)
     write_csv(args.processed / "summary.csv", rows)
-    plot_summary(args.processed / "baseline-vs-adaptive.png", rows)
+    plot_summary(args.processed / "policy-comparison.png", rows)
     write_report(args.processed / "report.md", rows, evidence, len(runs))
     print(f"Processed {len(runs)} runs into {args.processed}")
 
