@@ -11,18 +11,26 @@ Last updated: 2026-08-29 (Australia/Sydney).
 - `FuzzWeightedRendezvousNeverSelectsInvalidCandidate`, 10 seconds, 3,910,262 executions
 - PowerShell parser checks for the experiment runner, HLS verifier, e2e runner, and demo script
 - GNU Make dry-run expansion for all documented targets
-- Quality Controller `linux/amd64` image build with a 94 KiB Docker context after excluding experiment evidence
+- Offline parsing of every Kubernetes YAML document under `config/`, `deploy/`, and `experiments/k6/`; the MediaMTX and Helm values application configs are explicitly excluded
+- Final CoreDNS and Quality Controller `linux/amd64` image builds after excluding experiment evidence from the Docker context
 - Day 6 three-policy smoke matrix: 36/36 runs accepted by the strict processor
 - Repeated Day 6 processing: identical SHA-256 for `runs.csv`, `summary.csv`, `report.md`, and `policy-comparison.png`
 - Post-experiment cluster check: CoreDNS 2/2 Ready, Quality Controller 1/1 Ready, all three edge Deployments Ready, Corefile restored to `routingmode adaptive`
+- Final server-side deployment with `--force-conflicts`: the committed Corefile and `:dev` image fields successfully took ownership back from the experiment runner
+- `scripts/e2e-smoke.ps1`: PASS with three `MISS -> HIT` cache checks, unique Job UID/Pod, 0 HLS session failures, non-empty Prometheus telemetry, fault recovery, and adaptive-mode restoration
+- `scripts/demo.ps1`: PASS without hand-edited manifests; temporary evidence and all three NodeQuality capture stages were written under `.tmp/`
 
-## Pending after the requested upload-first checkpoint
+## Release gate still pending
 
-- Rebuild the patched CoreDNS image from the final documentation/automation commit.
-- Apply the final manifests with their declared `:dev` images.
-- Run `scripts/e2e-smoke.ps1` end to end against kind.
-- Run `scripts/demo.ps1` once and inspect its captured NodeQuality stages.
-- Confirm the GitHub CI result for the uploaded commit.
-- Create and push release tag `v0.1.0` only after every item above passes.
+- Commit the final e2e/HLS/CI fixes and rebuild the patched CoreDNS image from that exact commit.
+- Re-run e2e against that committed image identity.
+- Confirm the corrected GitHub CI result.
+- Create and push release tag `v0.1.0` only after those checks pass.
 
-An attempted final manifest apply exposed server-side field-manager conflicts because the Day 6 runner had temporarily patched the Corefile and image. `make deploy` now uses `--force-conflicts` for the repository-owned `deploy/` fields so the committed lab state deliberately takes ownership back. The final apply/e2e verification is pending; this record does not present that fix as already tested.
+Final validation found and corrected three automation defects rather than accepting partial success:
+
+1. The Day 6 runner had temporarily patched Corefile/image fields, causing a later server-side apply conflict. `make deploy` now deliberately takes ownership of repository-declared fields with `--force-conflicts`; the final apply and rollouts passed.
+2. The e2e recovery assertion applied `-notmatch` to a PowerShell array of Corefile lines, so non-matching lines produced a false failure even though adaptive mode was restored. It now joins the complete Corefile before matching.
+3. The HLS verifier selected the oldest live-playlist segment and could race MediaMTX window eviction. It now selects the latest complete segment, matching the k6 client; all three caches then passed `MISS -> HIT` and the complete demo passed.
+
+The first uploaded CI run also failed because `kubectl apply --dry-run=client` still attempted OpenAPI discovery without a cluster. The corrected workflow uses a repository Go test and Kubernetes' YAML decoder for truly offline manifest parsing. The corrected remote run remains a release gate.

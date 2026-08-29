@@ -59,8 +59,10 @@ try {
         throw 'Prometheus did not return non-empty cache/response telemetry.'
     }
 
-    $corefile = kubectl --context $Context -n edge-system get configmap/edgeroute-coredns -o jsonpath='{.data.Corefile}'
-    if ($LASTEXITCODE -ne 0 -or $corefile -notmatch 'routingmode\s+adaptive') {
+    $corefileOutput = kubectl --context $Context -n edge-system get configmap/edgeroute-coredns -o jsonpath='{.data.Corefile}'
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to read the restored Corefile.' }
+    $corefile = $corefileOutput -join "`n"
+    if ($corefile -notmatch 'routingmode\s+adaptive') {
         throw 'The e2e runner did not restore adaptive routing mode.'
     }
 

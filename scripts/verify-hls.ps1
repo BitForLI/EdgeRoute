@@ -41,7 +41,7 @@ $results = foreach ($edge in $Edges) {
 
     $playlist = Invoke-KubectlExec -Deployment $deployment `
         -Command @('wget', '-qO-', "http://127.0.0.1:8080/live/demo/$variant")
-    $segment = @($playlist | Where-Object { $_ -match '^[^#].*_seg[0-9]+\.mp4' })[0]
+    $segment = @($playlist | Where-Object { $_ -match '^[^#].*_seg[0-9]+\.mp4' } | Select-Object -Last 1)[0]
     if (-not $segment) { throw "No complete media segment found through $edge." }
 
     $url = "http://127.0.0.1:8080/live/demo/$segment"
