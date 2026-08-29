@@ -150,7 +150,7 @@ function Save-ServiceMetrics {
     }
     Save-Text -Path (Join-Path $RunDirectory 'controller-metrics.txt') -Value $controller
 
-    $query = [uri]::EscapeDataString('sum by (node,status) (increase(nginx_http_response_count_total[5m]))')
+    $query = [uri]::EscapeDataString('sum by (node,status,cache_status) (increase(nginxlog_http_response_count_total[5m]))')
     $prom = (Invoke-Day6Kubectl -Arguments @('get', '--raw', "/api/v1/namespaces/monitoring/services/http:monitoring-kube-prometheus-prometheus:9090/proxy/api/v1/query?query=$query")) -join "`n"
     Save-Text -Path (Join-Path $RunDirectory 'prometheus-range-query.json') -Value $prom
 }

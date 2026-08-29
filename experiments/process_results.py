@@ -27,6 +27,17 @@ REQUIRED_METRICS = (
     "hls_segment_duration",
     "iterations",
 )
+REQUIRED_FILES = (
+    "experiment-metadata.json",
+    "k6-summary.json",
+    "k6-metrics.jsonl",
+    "k6.log",
+    "nodequality-events.jsonl",
+    "prometheus-range-query.json",
+    "toxiproxy-config.json",
+    "controller-metrics.txt",
+    "coredns-metrics.txt",
+)
 
 
 def metric(summary: dict, name: str, value: str, default: float | None = None) -> float:
@@ -64,9 +75,10 @@ def load_runs(raw_root: Path) -> list[dict]:
     runs: list[dict] = []
     for metadata_path in sorted(raw_root.glob("*/experiment-metadata.json")):
         run_dir = metadata_path.parent
+        missing_files = [name for name in REQUIRED_FILES if not (run_dir / name).is_file()]
+        if missing_files:
+            raise ValueError(f"{run_dir.name} is missing evidence files: {', '.join(missing_files)}")
         summary_path = run_dir / "k6-summary.json"
-        if not summary_path.exists():
-            raise ValueError(f"Missing k6 summary for {run_dir.name}")
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         run_id = str(metadata.get("run_id", ""))
@@ -75,6 +87,12 @@ def load_runs(raw_root: Path) -> list[dict]:
         detail_run_id = first_detail_run_id(run_dir / "k6-metrics.jsonl")
         if detail_run_id != run_id:
             raise ValueError(f"k6 detail run_id '{detail_run_id}' does not match metadata '{run_id}'")
+        if int(metadata.get("k6_exit_code", -1)) != 0 or not metadata.get("job_uid") or not metadata.get("k6_pod"):
+            raise ValueError(f"{run_id} has invalid k6 execution identity or exit status")
+        prometheus = json.loads((run_dir / "prometheus-range-query.json").read_text(encoding="utf-8"))
+        prometheus_results = prometheus.get("data", {}).get("result", [])
+        if prometheus.get("status") != "success" or not prometheus_results:
+            raise ValueError(f"{run_id} has no Prometheus response/cache telemetry")
         missing_metrics = [name for name in REQUIRED_METRICS if name not in summary.get("metrics", {})]
         if missing_metrics:
             raise ValueError(f"{run_id} is missing k6 metrics: {', '.join(missing_metrics)}")
@@ -235,7 +253,7 @@ def write_report(path: Path, rows: list[dict], evidence: dict[str, str], run_cou
         "# Day 6 processed results",
         "",
         "Generated from immutable files under `../raw/` by `experiments/process_results.py`.",
-        f"All {run_count} runs passed the directory/metadata/detail run-ID check and were included; no run was excluded.",
+        f"All {run_count} runs passed the evidence-file, execution-identity, run-ID, and Prometheus telemetry checks; no run was excluded.",
         f"Profile: `{evidence['profile']}`. Commit: `{evidence['commit']}`. CoreDNS image ID: `{evidence['image_id']}`.",
         f"Host CPU: {evidence['hardware']}.",
         "Percentages and latency values are measured results for this recorded profile, not production SLO claims.",
