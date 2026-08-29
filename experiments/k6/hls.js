@@ -17,6 +17,7 @@ const targetVUs = Number(__ENV.TARGET_VUS || '20');
 const peakVUs = Number(__ENV.PEAK_VUS || '100');
 
 export const options = {
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   stages: [
     { duration: __ENV.WARMUP_DURATION || '1m', target: targetVUs },
     { duration: __ENV.STEADY_DURATION || '3m', target: targetVUs },

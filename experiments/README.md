@@ -34,6 +34,8 @@ python experiments/process_results.py
 
 This produces `runs.csv`, aggregated `summary.csv`, a Markdown table, and `baseline-vs-adaptive.png` under `experiments/results/processed/`. Re-running the processor replaces only derived artifacts; it never edits raw run data.
 
+By default, the processor requires the complete 2 variants x 4 scenarios x 3 repetitions matrix. It also requires one shared profile, Git commit, CoreDNS image ID, and host, and verifies that every directory name, metadata run ID, and k6 detail run ID agree. `--allow-incomplete` is only for runner development and must not be used for published evidence.
+
 ## Scenario contract
 
 Every directory under `scenarios/` contains `setup.ps1`, `inject.ps1`, `recover.ps1`, `verify.ps1`, and `scenario.md` as required by the implementation manual. The implemented faults are 150 ms + 20 ms jitter, connection reset, Pod outage, and empty-cache Pod replacement.

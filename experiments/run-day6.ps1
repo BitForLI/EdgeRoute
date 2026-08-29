@@ -172,7 +172,15 @@ function Invoke-Run {
     New-RunConfig -RunID $runID -Variant $Variant -Scenario $Scenario
     Invoke-Day6Kubectl -Arguments @('delete', 'job/edgeroute-k6', '-n', $namespace, '--ignore-not-found=true', '--wait=true') | Out-Null
     Invoke-Day6Kubectl -Arguments @('apply', '-f', (Join-Path $PSScriptRoot 'k6\job.yaml')) | Out-Null
-    Invoke-Day6Kubectl -Arguments @('wait', '--for=condition=Ready', 'pod', '-n', $namespace, '-l', 'app.kubernetes.io/name=edgeroute-k6', '--timeout=120s') | Out-Null
+    $jobUID = ((Invoke-Day6Kubectl -Arguments @('get', 'job/edgeroute-k6', '-n', $namespace, '-o', 'jsonpath={.metadata.uid}')) -join '').Trim()
+    if (-not $jobUID) { throw "Unable to resolve the k6 Job UID for $runID." }
+    $podSelector = "batch.kubernetes.io/controller-uid=$jobUID"
+    Invoke-Day6Kubectl -Arguments @('wait', '--for=condition=Ready', 'pod', '-n', $namespace, '-l', $podSelector, '--timeout=120s') | Out-Null
+    $podNames = @((Invoke-Day6Kubectl -Arguments @('get', 'pods', '-n', $namespace, '-l', $podSelector, '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}')) | Where-Object { $_.Trim() })
+    if ($podNames.Count -ne 1) { throw "Expected exactly one pod for k6 Job UID $jobUID; found $($podNames.Count)." }
+    $pod = $podNames[0].Trim()
+    $podRunID = ((Invoke-Day6Kubectl -Arguments @('exec', '-n', $namespace, $pod, '--', 'printenv', 'RUN_ID')) -join '').Trim()
+    if ($podRunID -ne $runID) { throw "k6 pod $pod has RUN_ID '$podRunID'; expected '$runID'." }
     Save-NodeQualitySnapshot -RunDirectory $runDirectory -Stage 'before-injection'
     Start-Sleep -Seconds $InjectionDelaySeconds
     & (Join-Path $scenarioRoot 'inject.ps1')
@@ -180,7 +188,6 @@ function Invoke-Run {
     Save-NodeQualitySnapshot -RunDirectory $runDirectory -Stage 'after-injection'
 
     try {
-        $pod = ((Invoke-Day6Kubectl -Arguments @('get', 'pods', '-n', $namespace, '-l', 'app.kubernetes.io/name=edgeroute-k6', '-o', 'jsonpath={.items[0].metadata.name}')) -join '').Trim()
         $deadline = (Get-Date).AddSeconds(900)
         do {
             & kubectl --context $Context exec -n $namespace $pod -- test -f /results/complete *> $null
@@ -191,6 +198,10 @@ function Invoke-Run {
         $relativeRunDirectory = [System.IO.Path]::GetRelativePath($repoRoot, $runDirectory).Replace('\', '/')
         Invoke-Day6Kubectl -Arguments @('cp', "$namespace/${pod}:/results/k6-summary.json", "$relativeRunDirectory/k6-summary.json") | Out-Null
         Invoke-Day6Kubectl -Arguments @('cp', "$namespace/${pod}:/results/k6-metrics.jsonl", "$relativeRunDirectory/k6-metrics.jsonl") | Out-Null
+        $detailRunIDMatch = Get-Content -LiteralPath (Join-Path $runDirectory 'k6-metrics.jsonl') -TotalCount 100 |
+            Select-String -Pattern '"run_id":"([^"]+)"' | Select-Object -First 1
+        $detailRunID = if ($detailRunIDMatch) { $detailRunIDMatch.Matches[0].Groups[1].Value } else { '' }
+        if ($detailRunID -ne $runID) { throw "Copied k6 detail has RUN_ID '$detailRunID'; expected '$runID'." }
         $k6ExitCode = ((Invoke-Day6Kubectl -Arguments @('exec', '-n', $namespace, $pod, '--', 'cat', '/results/exit-code')) -join '').Trim()
         $logs = (Invoke-Day6Kubectl -Arguments @('logs', "pod/$pod", '-n', $namespace)) -join "`n"
         Save-Text -Path (Join-Path $runDirectory 'k6.log') -Value $logs
@@ -219,6 +230,9 @@ function Invoke-Run {
         repetition = $Repetition
         profile = $Profile
         random_seed = 20260828 + $Repetition
+        job_uid = $jobUID
+        k6_pod = $pod
+        k6_exit_code = [int]$k6ExitCode
         start_timestamp = $startedAt.ToString('o')
         end_timestamp = $finishedAt.ToString('o')
         container_tags = @{coredns = $ImageTag; coredns_id = $imageID; k6_upstream = $K6Image; k6_runtime = $K6RuntimeImage}
