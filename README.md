@@ -105,7 +105,7 @@ The controller uses standard mechanisms rather than reimplementing infrastructur
 
 Exact formulas, candidate filtering order, routing-key privacy, references, and measured benchmarks are in [docs/algorithm.md](docs/algorithm.md). The full component and failure boundaries are in [docs/architecture.md](docs/architecture.md) and [docs/failure-analysis.md](docs/failure-analysis.md).
 
-The exact local pass/pending split for the current commit is recorded in [docs/verification.md](docs/verification.md); `v0.1.0` is not published until the pending final e2e checks pass.
+The exact verification record for the current release is in [docs/verification.md](docs/verification.md). The project release tag is `edgeroute-v0.1.0`; the inherited upstream `v0.1.0` tag is intentionally preserved.
 
 ## Tests and common commands
 

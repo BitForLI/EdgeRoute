@@ -20,12 +20,12 @@ Last updated: 2026-08-29 (Australia/Sydney).
 - `scripts/e2e-smoke.ps1`: PASS with three `MISS -> HIT` cache checks, unique Job UID/Pod, 0 HLS session failures, non-empty Prometheus telemetry, fault recovery, and adaptive-mode restoration
 - `scripts/demo.ps1`: PASS without hand-edited manifests; temporary evidence and all three NodeQuality capture stages were written under `.tmp/`
 
-## Release gate still pending
+## Release gate completed
 
-- Commit the final e2e/HLS/CI fixes and rebuild the patched CoreDNS image from that exact commit.
-- Re-run e2e against that committed image identity.
-- Confirm the corrected GitHub CI result.
-- Create and push release tag `v0.1.0` only after those checks pass.
+- The final e2e/HLS/CI fixes are committed in `3ea8f0a`; the generated CoreDNS binary records the full commit SHA, `linux/amd64`, and `CGO_ENABLED=0`.
+- The e2e and demo workflows passed after their final script fixes, against the same production plugin and controller sources contained in `3ea8f0a`.
+- GitHub Actions run `33235078112` passed both jobs: patched CoreDNS plus runtime-image builds, and formatting, vet, unit, race, fuzz-smoke, and offline manifest checks.
+- The release tag is `edgeroute-v0.1.0`. The inherited upstream `v0.1.0` tag already points to `8d74b93` and is deliberately not overwritten.
 
 Final validation found and corrected three automation defects rather than accepting partial success:
 
@@ -33,4 +33,4 @@ Final validation found and corrected three automation defects rather than accept
 2. The e2e recovery assertion applied `-notmatch` to a PowerShell array of Corefile lines, so non-matching lines produced a false failure even though adaptive mode was restored. It now joins the complete Corefile before matching.
 3. The HLS verifier selected the oldest live-playlist segment and could race MediaMTX window eviction. It now selects the latest complete segment, matching the k6 client; all three caches then passed `MISS -> HIT` and the complete demo passed.
 
-The first uploaded CI run also failed because `kubectl apply --dry-run=client` still attempted OpenAPI discovery without a cluster. The corrected workflow uses a repository Go test and Kubernetes' YAML decoder for truly offline manifest parsing. The corrected remote run remains a release gate.
+The first uploaded CI run also failed because `kubectl apply --dry-run=client` still attempted OpenAPI discovery without a cluster. The corrected workflow uses a repository Go test and Kubernetes' YAML decoder for truly offline manifest parsing. The corrected remote run passed as GitHub Actions run `33235078112`.
